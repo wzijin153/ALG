@@ -13,7 +13,7 @@ package LinkedList;
 // 示例 2： 输入：head = [], val = 1 输出：[]
 // 示例 3： 输入：head = [7,7,7,7], val = 7 输出：[]
 
-public class removeElements {
+class removeElements {
     public ListNode method(ListNode head, int val) {
         ListNode dummyHead = new ListNode(-1, head);
 //        dummyHead.next = head;
