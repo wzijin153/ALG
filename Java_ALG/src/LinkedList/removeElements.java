@@ -15,8 +15,7 @@ package LinkedList;
 
 class removeElements {
     public ListNode method(ListNode head, int val) {
-        ListNode dummyHead = new ListNode(-1, head);
-//        dummyHead.next = head;
+        ListNode dummyHead = new ListNode(0, head);
         ListNode cur = dummyHead;
         while (cur.next != null) {
             if (cur.next.val == val) {
