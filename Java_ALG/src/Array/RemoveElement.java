@@ -9,6 +9,7 @@ public class RemoveElement {
         int slowIndex = 0;
         for (int fastIndex = 0; fastIndex < nums.length; fastIndex++){
             if (nums[fastIndex] != val){
+                // 由于数组元素在内存中是连续存放的, 不能直接移除元素, 所以考虑用双指针法来覆盖元素
                 nums[slowIndex++] = nums[fastIndex];
             }
         }

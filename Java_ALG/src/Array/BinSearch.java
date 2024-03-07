@@ -1,5 +1,6 @@
 package Array;
-
+import java.util.Arrays;
+import java.util.HashSet;
 // 二分查找 https://leetcode.cn/problems/binary-search/description/
 // 给定一个 n 个元素有序的（升序）整型数组 nums 和一个目标值 target  ，写一个函数搜索 nums 中的 target，如果目标值存在返回下标，否则返回 -1
 
@@ -16,7 +17,8 @@ class BinSearch {
         int left = 0;
         int right = nums.length - 1;
         while (left <= right){
-            int middle = (left + right) / 2;
+//            int middle = (left + right) / 2;
+            int middle = (left + right) >>> 1;
             if (nums[middle] < target){
                 left = middle + 1;
             }else if (nums[middle] > target){
@@ -34,5 +36,6 @@ class BinSearch {
         BinSearch binSearch = new BinSearch();
         int res = binSearch.search(nums, target);
         System.out.println(res);
+        HashSet<Integer> integers = new HashSet<>();
     }
 }
