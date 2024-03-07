@@ -24,6 +24,11 @@ class GroupAnagrams {
             // 将排序后的字符数组组合为新的字符串
             String sortedStr = new String(charArray);// 组合 str
             // computeIfAbsent方法, https://www.runoob.com/java/java-hashmap-computeifabsent.html
+            /*
+            1. 如果 sortedStr 已经存在于映射中，computeIfAbsent 返回与该键关联的现有 List<String>
+            2. 如果 sortedStr 不存在，computeIfAbsent 创建一个新的 ArrayList<String>，将其与键 sortedStr 关联，并返回新创建的列表
+            3. 在 computeIfAbsent 返回的值上调用 add(str)
+             */
             map.computeIfAbsent(sortedStr, key -> new ArrayList<>()).add(str);
         }
         return new ArrayList<>(map.values());
