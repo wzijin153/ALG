@@ -10,29 +10,34 @@ import java.util.*;
  * @create: 2024-03-08 11:57
  **/
 
+// https://leetcode.cn/problems/longest-consecutive-sequence/description/?envType=study-plan-v2&envId=top-100-liked
+//
 public class longestConsecutive {
     public int method(int[] nums) {
         if (nums == null || nums.length == 0) {
             return 0;
         }
-        ArrayList<Integer> arrayList = new ArrayList<>();
-//        HashSet<Integer> result = new HashSet<>();
-        HashMap<Integer, List<Integer>> result = new HashMap<>();
+        // 用HashSet去重, 这样当nums中存在重复数据时就不用再判断
         HashSet<Integer> numSet = new HashSet<>();
         for (int i : nums) {
             numSet.add(i);
         }
-
-        arrayList.sort(Comparator.naturalOrder());
-        for (int i = 0; i < arrayList.size() - 1; i++) {
-            int lag = arrayList.get(i + 1);
-            int now = arrayList.get(i);
-            if (now - lag == 1) {
-//                result.add(arrayList.get(i));
-                result.computeIfAbsent(i + 1, k -> new ArrayList<>()).add(arrayList.get(i));
+        int maxLength = 0;
+        for (int num : numSet) {
+            // 如果num是一个序列的起点，即num-1不在numSet中
+            if (!numSet.contains(num - 1)) {
+                // 更新序列长度
+                int currentNum = num;
+                int currentLength = 1;
+                // 寻找以当前num为起点的连续序列的长度
+                while (numSet.contains(currentNum + 1)) {
+                    currentNum++;
+                    currentLength++;
+                }
+                maxLength = Math.max(maxLength, currentLength);
             }
         }
-        return result.size() + 1;
+        return maxLength;
     }
 
     public static void main(String[] args) {
