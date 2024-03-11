@@ -14,7 +14,6 @@ import java.util.List;
 // 给定两个字符串 s 和 p，找到 s 中所有 p 的 异位词 的子串，返回这些子串的起始索引。不考虑答案输出的顺序 https://leetcode.cn/problems/find-all-anagrams-in-a-string/description/?envType=study-plan-v2&envId=top-100-liked
 // 1.创建一个哈希表 charCountMap，用于记录字符串 p 中每个字符的出现次数
 // 2.使用两个指针 left 和 right 分别表示滑动窗口的左右边界。初始时，它们都指向字符串的起始位置
-
 // 3.移动右指针 right，并更新 charCountMap 中对应字符的出现次数。
 // 4.当发现当前字符在 charCountMap 中，表示匹配到了字符串 p 中的一个字符，此时将 matchCount 增加。
 // 5.当 matchCount 等于 charCountMap 中字符的种类数时，说明当前窗口包含了字符串 p 的所有字符，可以进行比较
@@ -37,11 +36,14 @@ public class findAnagrams {
         while (right < s.length()) {
             char rightChar = s.charAt(right);
             if (charCountMap.containsKey(rightChar)) {
+                // - 1 是因为如果str1是str2的字母异位词, 则它们对应字符出现的次数相减为0
                 charCountMap.put(rightChar, charCountMap.get(rightChar) - 1);
-                if (charCountMap.get(rightChar) == 0) {
+                // 字母异位词思想: HashTable/isAnagram.java
+                if (charCountMap.get(rightChar) == 0) {// == 0 说明匹配上
                     matchCount++;
                 }
             }
+            // 当matchCount == charCountMap的size时, 可以开始比较, 限定比较条件
             while (matchCount == charCountMap.size()) {
                 if (right - left == p.length() - 1) {// 限定滑动窗口[left, right]的长度为字符串p的长度
                     result.add(left);
@@ -49,6 +51,7 @@ public class findAnagrams {
                 char leftChar = s.charAt(left);
                 if (charCountMap.containsKey(leftChar)) {
                     charCountMap.put(leftChar, charCountMap.get(leftChar) + 1);
+                    // > 0说明不匹配, 参考上面 == 0的判断, 不匹配需要减matchCount
                     if (charCountMap.get(leftChar) > 0) {
                         matchCount--;
                     }
