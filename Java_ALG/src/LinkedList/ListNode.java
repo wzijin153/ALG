@@ -7,11 +7,11 @@ package LinkedList;
  * @create: 2024-02-25 13:08
  **/
 
-class ListNode {
+public class ListNode {
     // 数据域
     int val;
     // next域, 指向下一个节点
-    ListNode next;
+    public ListNode next;
 
     // 节点的构造函数(无参)
     public ListNode() {
