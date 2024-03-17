@@ -16,13 +16,6 @@ import java.util.Arrays;
  */
 // 动画演示: https://www.runoob.com/w3cnote/bubble-sort.html
 class BubbleSort {
-    public static void main(String[] args) {
-        BubbleSort bubbleSort = new BubbleSort();
-        int[] array = {9, 7, 8, 5, 6, 4, 3, 8, 1, 0};
-        bubbleSort.swap(array);
-        System.out.println(Arrays.toString(array));
-    }
-
     public void swap(int[] array) {
         for (int j = 0; j < array.length; j++) {
             boolean swapped = false;
@@ -39,5 +32,12 @@ class BubbleSort {
                 return;
             }
         }
+    }
+
+    public static void main(String[] args) {
+        BubbleSort bubbleSort = new BubbleSort();
+        int[] array = {9, 7, 8, 5, 6, 4, 3, 8, 1, 0};
+        bubbleSort.swap(array);
+        System.out.println(Arrays.toString(array));
     }
 }
