@@ -14,14 +14,7 @@ import java.util.Arrays;
     2.依次遍历最小值索引后面的数, 取出最小值的索引
     3.第一个索引值和第二个索引值比较, 如果第二个索引的数小于第一个索引的数, 则交换
  */
-public class SelectionSort {
-    public static void main(String[] args) {
-        SelectionSort selectionSort = new SelectionSort();
-        int[] array = {64, 25, 12, 22, 11};
-        selectionSort.sort(array);
-        System.out.println(Arrays.toString(array));
-    }
-
+class SelectionSort {
     public void sort(int[] array) {
         for (int i = 0; i < array.length - 1; i++) {// 这里的 i 表示选择排序的趟数
             // 假设当前元素为最小值的索引
@@ -39,5 +32,12 @@ public class SelectionSort {
                 array[i] = temp;
             }
         }
+    }
+
+    public static void main(String[] args) {
+        SelectionSort selectionSort = new SelectionSort();
+        int[] array = {64, 25, 12, 22, 11};
+        selectionSort.sort(array);
+        System.out.println(Arrays.toString(array));
     }
 }
