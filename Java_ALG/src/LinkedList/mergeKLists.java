@@ -9,7 +9,7 @@ import java.util.PriorityQueue;
  * @create: 2024-03-17 15:46
  **/
 // https://leetcode.cn/problems/merge-k-sorted-lists/
-
+// 优先队列PriorityQueue的详细介绍: https://javabetter.cn/collection/PriorityQueue.html
 /*
     思路：
     1.创建优先队列（PriorityQueue），并指定了一个比较器，用于按照节点的值进行比较
@@ -27,6 +27,7 @@ public class mergeKLists {
             3.如果节点a的val字段值小于节点b的val字段值，则返回负值; 如果节点a的val字段值等于节点b的val字段值，则返回0; 如果节点a的val字段值大于节点b的val字段值，则返回正值
             4.在 PriorityQueue 中，元素的优先级是按照它们的 val 值升序排列的; 也就是说，队列中的最小元素（val 最小的元素）会被优先取出
          */
+        // 优先队列的顺序: 1.元素本身的自然顺序(natural ordering); 2.构造时传入的比较器(Comparator)
         PriorityQueue<ListNode> queue = new PriorityQueue<>((a, b) -> (a.val - b.val));
         // 将所有链表的头节点加入优先队列
         for (ListNode node : lists) {
