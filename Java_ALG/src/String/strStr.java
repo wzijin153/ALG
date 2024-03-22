@@ -1,4 +1,4 @@
-package Array;
+package String;
 
 /**
  * @program: alghorithm
