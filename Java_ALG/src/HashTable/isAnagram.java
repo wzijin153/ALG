@@ -1,8 +1,6 @@
 package HashTable;
 
 
-import java.util.Arrays;
-
 /**
  * @program: alghorithm
  * @description: 有效的字母异位词

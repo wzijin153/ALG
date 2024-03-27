@@ -7,7 +7,7 @@ public class reverseWords {
         StringBuffer buffer = new StringBuffer();
         // 倒序遍历!
         for (int i = s1.length - 1; i >= 0; i--) {
-            if (s1[i].equals("")) continue;
+            if (s1[i].isEmpty()) continue;
             buffer.append(s1[i]).append(" ");
         }
         return buffer.toString().trim();

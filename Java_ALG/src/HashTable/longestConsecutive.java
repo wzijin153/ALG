@@ -1,7 +1,6 @@
 package HashTable;
 
-import java.sql.Array;
-import java.util.*;
+import java.util.HashSet;
 
 /**
  * @program: alghorithm

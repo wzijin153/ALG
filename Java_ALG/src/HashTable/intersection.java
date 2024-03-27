@@ -24,6 +24,6 @@ class intersection {
                 result.add(i);
             }
         }
-        return result.stream().mapToInt(x -> (int) x).toArray();
+        return result.stream().mapToInt(x -> x).toArray();
     }
 }

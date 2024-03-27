@@ -1,7 +1,5 @@
 package Array;
 
-import static java.util.Collections.reverse;
-
 /**
  * @program: alghorithm
  * @description: 删除有序数组中的重复项
