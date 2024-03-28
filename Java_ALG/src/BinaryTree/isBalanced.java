@@ -8,6 +8,7 @@ package BinaryTree;
  **/
 // https://leetcode.cn/problems/balanced-binary-tree/
 public class isBalanced {
+    // 平衡二叉树: 二叉树每个节点的左右两个子树的高度差的绝对值不超过1 (注意是每一个节点)
     public boolean method(TreeNode root) {
         if (root == null) return true;
         return getHeight(root) != -1;
@@ -21,8 +22,6 @@ public class isBalanced {
         int rightHeight = getHeight(node.right);
         if (rightHeight == -1) return -1;
         // 2.是平衡二叉树再返回, 不是就不用返回, 用 -1 来标记不符合平衡二叉树的规则
-//        if (Math.abs(leftHeight - rightHeight) > 1) return -1;
-//        else return Math.max(leftHeight, rightHeight) + 1;
         return Math.abs(leftHeight - rightHeight) > 1 ? -1 : Math.max(leftHeight, rightHeight) + 1;
     }
 }

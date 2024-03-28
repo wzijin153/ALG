@@ -35,8 +35,7 @@ public class maxDepth {
         int leftDepth = getMaxDepth(node.left);
         // 2.再求右子树的深度
         int rightDepth = getMaxDepth(node.right);
-        // 3.取左右深度最大的数值 再+1 （加1是因为算上当前中间节点）
-        int depth = Math.max(leftDepth, rightDepth) + 1;
-        return depth;
+        // 3.取左右深度最大的数值 再 +1 （加1是因为算上当前中间节点）
+        return Math.max(leftDepth, rightDepth) + 1;
     }
 }

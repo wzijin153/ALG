@@ -12,6 +12,7 @@ import java.util.Queue;
 
 public class minDepth {
     public int method(TreeNode root) {
+        // 1.迭代法
         int minDepth = 0;
         if (root == null) return minDepth;
         Queue<TreeNode> queue = new LinkedList<>();
@@ -28,5 +29,15 @@ public class minDepth {
             }
         }
         return minDepth;
+    }
+
+    // 2.递归法, 后序遍历
+    int getMinDepth(TreeNode node) {
+        if (node == null) return 0;
+        int leftDepth = getMinDepth(node.left);
+        int rightDepth = getMinDepth(node.right);
+        if (node.left == null && node.right != null) return rightDepth + 1;
+        if (node.left != null && node.right == null) return leftDepth + 1;
+        return Math.min(leftDepth, rightDepth) + 1;
     }
 }
