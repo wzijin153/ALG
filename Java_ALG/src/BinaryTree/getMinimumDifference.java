@@ -6,7 +6,7 @@ package BinaryTree;
  * @author: wangzijin
  * @create: 2024-04-02 23:13
  **/
-
+// https://leetcode.cn/problems/minimum-absolute-difference-in-bst/description/
 public class getMinimumDifference {
     int minValue = Integer.MAX_VALUE;
     TreeNode pre = null;
