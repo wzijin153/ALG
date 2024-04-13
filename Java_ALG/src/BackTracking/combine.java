@@ -14,17 +14,30 @@ public class combine {
     ArrayList<List<Integer>> result = new ArrayList<>();
     ArrayList<Integer> path = new ArrayList<>();
 
+//    void backtracking(int n, int k, int startIndex) {
+//        // 终止条件: 到树形结构叶子节点时
+//        if (path.size() == k) {
+//            result.add(new ArrayList<>(path));
+//            return;
+//        }
+//        // 单层搜索逻辑
+//        for (int i = startIndex; i <= n; i++) {
+//            path.add(i);
+//            backtracking(n, k, i + 1);
+//            path.removeLast(); // 回溯
+//        }
+//    }
+
+    // 剪枝优化
     void backtracking(int n, int k, int startIndex) {
-        // 终止条件: 到树形结构叶子节点时
         if (path.size() == k) {
             result.add(new ArrayList<>(path));
             return;
         }
-        // 单层搜索逻辑
-        for (int i = startIndex; i <= n; i++) {
+        for (int i = startIndex; i <= n - (k - path.size()) + 1; i++) {
             path.add(i);
             backtracking(n, k, i + 1);
-            path.removeLast(); // 回溯
+            path.removeLast();
         }
     }
 
