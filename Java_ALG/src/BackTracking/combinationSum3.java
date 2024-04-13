@@ -1,6 +1,7 @@
 package BackTracking;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -12,7 +13,7 @@ import java.util.List;
 // https://leetcode.cn/problems/combination-sum-iii/
 public class combinationSum3 {
     ArrayList<List<Integer>> result = new ArrayList<>();
-    ArrayList<Integer> path = new ArrayList<>();
+    LinkedList<Integer> path = new LinkedList<>();
 
     void backtracking(int n, int k, int sum, int startIndex) {
         // 剪枝

@@ -1,6 +1,7 @@
 package BackTracking;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -12,7 +13,7 @@ import java.util.List;
 // https://leetcode.cn/problems/combinations/
 public class combine {
     ArrayList<List<Integer>> result = new ArrayList<>();
-    ArrayList<Integer> path = new ArrayList<>();
+    LinkedList<Integer> path = new LinkedList<>();
 
 //    void backtracking(int n, int k, int startIndex) {
 //        // 终止条件: 到树形结构叶子节点时
