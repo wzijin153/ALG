@@ -14,14 +14,6 @@ import java.util.List;
 public class combinationSum {
     List<Integer> path = new ArrayList<>();
     List<List<Integer>> result = new ArrayList<>();
-
-    public static void main(String[] args) {
-        combinationSum test = new combinationSum();
-        int[] candidates = {2, 3, 6, 7};
-        int target = 7;
-        System.out.println(test.method(candidates, target));
-    }
-
     void backtracking(int[] candidates, int target, int startIndex) {
         // 终止条件
         if (target == 0) {
@@ -42,5 +34,12 @@ public class combinationSum {
         Arrays.sort(candidates);// 剪枝: 先进行排序
         backtracking(candidates, target, 0);
         return result;
+    }
+
+    public static void main(String[] args) {
+        combinationSum test = new combinationSum();
+        int[] candidates = {2, 3, 6, 7};
+        int target = 7;
+        System.out.println(test.method(candidates, target));
     }
 }
