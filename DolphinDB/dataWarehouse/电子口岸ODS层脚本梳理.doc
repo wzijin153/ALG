@@ -1,0 +1,447 @@
+Date: Fri, 26 Apr 2024 03:06:58 +0000 (UTC)
+Message-ID: <107964514.7.1714100818711@c246a9ea067e>
+Subject: Exported From Confluence
+MIME-Version: 1.0
+Content-Type: multipart/related; 
+	boundary="----=_Part_6_1160025186.1714100818711"
+
+------=_Part_6_1160025186.1714100818711
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+Content-Location: file:///C:/exported.html
+
+<html xmlns:o=3D'urn:schemas-microsoft-com:office:office'
+      xmlns:w=3D'urn:schemas-microsoft-com:office:word'
+      xmlns:v=3D'urn:schemas-microsoft-com:vml'
+      xmlns=3D'urn:w3-org-ns:HTML'>
+<head>
+    <meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3Dutf-8=
+">
+    <title>=E7=94=B5=E5=AD=90=E5=8F=A3=E5=B2=B8ODS=E5=B1=82=E8=84=9A=E6=9C=
+=AC=E6=A2=B3=E7=90=86</title>
+    <!--[if gte mso 9]>
+    <xml>
+        <o:OfficeDocumentSettings>
+            <o:TargetScreenSize>1024x640</o:TargetScreenSize>
+            <o:PixelsPerInch>72</o:PixelsPerInch>
+            <o:AllowPNG/>
+        </o:OfficeDocumentSettings>
+        <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>90</w:Zoom>
+            <w:DoNotOptimizeForBrowser/>
+        </w:WordDocument>
+    </xml>
+    <![endif]-->
+    <style>
+                <!--
+        @page Section1 {
+            size: 8.5in 11.0in;
+            margin: 1.0in;
+            mso-header-margin: .5in;
+            mso-footer-margin: .5in;
+            mso-paper-source: 0;
+        }
+
+        table {
+            border: solid 1px;
+            border-collapse: collapse;
+        }
+
+        table td, table th {
+            border: solid 1px;
+            padding: 5px;
+        }
+
+        td {
+            page-break-inside: avoid;
+        }
+
+        tr {
+            page-break-after: avoid;
+        }
+
+        div.Section1 {
+            page: Section1;
+        }
+
+        /* Confluence print stylesheet. Common to all themes for print medi=
+a */
+/* Full of !important until we improve batching for print CSS */
+
+@media print {
+    #main {
+        padding-bottom: 1em !important; /* The default padding of 6em is to=
+o much for printouts */
+    }
+
+    body {
+        font-family: Arial, Helvetica, FreeSans, sans-serif;
+        font-size: 10pt;
+        line-height: 1.2;
+    }
+
+    body, #full-height-container, #main, #page, #content, .has-personal-sid=
+ebar #content {
+        background: var(--ds-surface, #fff) !important;
+        color: var(--ds-text, #000) !important;
+        border: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        display: block !important;
+    }
+
+    a, a:link, a:visited, a:focus, a:hover, a:active {
+        color: var(--ds-text, #000);
+    }
+
+    #content h1,
+    #content h2,
+    #content h3,
+    #content h4,
+    #content h5,
+    #content h6 {
+        font-family: Arial, Helvetica, FreeSans, sans-serif;
+        page-break-after: avoid;
+    }
+
+    pre {
+        font-family: Monaco, "Courier New", monospace;
+    }
+
+    #header,
+    .aui-header-inner,
+    #navigation,
+    #sidebar,
+    .sidebar,
+    #personal-info-sidebar,
+    .ia-fixed-sidebar,
+    .page-actions,
+    .navmenu,
+    .ajs-menu-bar,
+    .noprint,
+    .inline-control-link,
+    .inline-control-link a,
+    a.show-labels-editor,
+    .global-comment-actions,
+    .comment-actions,
+    .quick-comment-container,
+    #addcomment {
+        display: none !important;
+    }
+
+    /* CONF-28544 cannot print multiple pages in IE */
+    #splitter-content {
+        position: relative !important;
+    }
+
+    .comment .date::before {
+        content: none !important; /* remove middot for print view */
+    }
+
+    h1.pagetitle img {
+        height: auto;
+        width: auto;
+    }
+
+    .print-only {
+        display: block;
+    }
+
+    #footer {
+        position: relative !important; /* CONF-17506 Place the footer at en=
+d of the content */
+        margin: 0;
+        padding: 0;
+        background: none;
+        clear: both;
+    }
+
+    #poweredby {
+        border-top: none;
+        background: none;
+    }
+
+    #poweredby li.print-only {
+        display: list-item;
+        font-style: italic;
+    }
+
+    #poweredby li.noprint {
+        display: none;
+    }
+
+    /* no width controls in print */
+    .wiki-content .table-wrap,
+    .wiki-content p,
+    .panel .codeContent,
+    .panel .codeContent pre,
+    .image-wrap {
+        overflow: visible !important;
+    }
+
+    /* TODO - should this work? */
+    #children-section,
+    #comments-section .comment,
+    #comments-section .comment .comment-body,
+    #comments-section .comment .comment-content,
+    #comments-section .comment p {
+        page-break-inside: avoid;
+    }
+
+    #page-children a {
+        text-decoration: none;
+    }
+
+    /**
+     hide twixies
+
+     the specificity here is a hack because print styles
+     are getting loaded before the base styles. */
+    #comments-section.pageSection .section-header,
+    #comments-section.pageSection .section-title,
+    #children-section.pageSection .section-header,
+    #children-section.pageSection .section-title,
+    .children-show-hide {
+        padding-left: 0;
+        margin-left: 0;
+    }
+
+    .children-show-hide.icon {
+        display: none;
+    }
+
+    /* personal sidebar */
+    .has-personal-sidebar #content {
+        margin-right: 0px;
+    }
+
+    .has-personal-sidebar #content .pageSection {
+        margin-right: 0px;
+    }
+
+    .no-print, .no-print * {
+        display: none !important;
+    }
+}
+-->
+    </style>
+</head>
+<body>
+    <h1>=E7=94=B5=E5=AD=90=E5=8F=A3=E5=B2=B8ODS=E5=B1=82=E8=84=9A=E6=9C=AC=
+=E6=A2=B3=E7=90=86</h1>
+    <div class=3D"Section1">
+        <h1 id=3D"id-=E7=94=B5=E5=AD=90=E5=8F=A3=E5=B2=B8ODS=E5=B1=82=E8=84=
+=9A=E6=9C=AC=E6=A2=B3=E7=90=86-=E4=B8=80=E3=80=81=E6=8B=BC=E7=AE=B1=E4=BB=
+=BB=E5=8A=A1">=E4=B8=80=E3=80=81=E6=8B=BC=E7=AE=B1=E4=BB=BB=E5=8A=A1</h1>
+<h2 id=3D"id-=E7=94=B5=E5=AD=90=E5=8F=A3=E5=B2=B8ODS=E5=B1=82=E8=84=9A=E6=
+=9C=AC=E6=A2=B3=E7=90=86-1.=E8=A1=A8=E5=AF=B9=E8=B1=A1">1. =E8=A1=A8=E5=AF=
+=B9=E8=B1=A1</h2>
+<p><code>ENTRY_LIST_WIDE</code>=EF=BC=9A369=E5=88=97=EF=BC=8C=E6=8C=89=E5=
+=91=A8=E5=88=86=E5=8C=BA=EF=BC=8C=E8=AE=B0=E5=BD=95=E9=9B=86=E8=A3=85=E7=AE=
+=B1=E6=95=B0=E6=8D=AE=E7=9A=84=E5=AE=BD=E8=A1=A8=EF=BC=8C=E6=8A=A5=E5=85=B3=
+=E5=8D=95=E8=A1=A8</p>
+<p><code>ENTRY_CONTAINER_WIDE</code>=EF=BC=9A30=E5=88=97=EF=BC=8C=E6=8C=89=
+=E5=91=A8=E5=88=86=E5=8C=BA=EF=BC=8C=E8=AE=B0=E5=BD=95=E9=9B=86=E8=A3=85=E7=
+=AE=B1=E7=9A=84=E6=B5=B7=E5=85=B3=E7=BC=96=E5=8F=B7=E3=80=81=E9=9B=86=E8=A3=
+=85=E7=AE=B1=E7=BC=96=E5=8F=B7=E7=AD=89ID=E4=BF=A1=E6=81=AF=EF=BC=8C=E9=9B=
+=86=E8=A3=85=E7=AE=B1=E5=9F=BA=E6=9C=AC=E4=BF=A1=E6=81=AF=E8=A1=A8</p>
+<h2 id=3D"id-=E7=94=B5=E5=AD=90=E5=8F=A3=E5=B2=B8ODS=E5=B1=82=E8=84=9A=E6=
+=9C=AC=E6=A2=B3=E7=90=86-2.=E4=B8=9A=E5=8A=A1=E7=9B=AE=E7=9A=84">2. =E4=B8=
+=9A=E5=8A=A1=E7=9B=AE=E7=9A=84</h2>
+<p>=E5=AE=9A=E6=97=B6=E8=AE=A1=E7=AE=97=E9=9B=86=E8=A3=85=E7=AE=B1=E4=BB=BB=
+=E5=8A=A1</p>
+<ul>
+<li>
+<p>=E5=A2=9E=E9=87=8F=E6=9B=B4=E6=96=B0=EF=BC=9A=E6=A0=B9=E6=8D=AE=E5=AE=9E=
+=E6=97=B6=E6=95=B0=E6=8D=AE=EF=BC=8C=E5=8F=AA=E6=9B=B4=E6=96=B0=E8=BF=91=E4=
+=B8=A4=E4=B8=AA=E6=9C=88=E6=95=B0=E6=8D=AE</p></li>
+<li>
+<p>=E5=85=A8=E9=87=8F=E6=9B=B4=E6=96=B0=EF=BC=9A=E8=8B=A5=E5=8F=91=E7=8E=B0=
+<code>ENTRY_CONTAINER_WIDE</code>=E8=A1=A8=E4=B8=8D=E5=AD=98=E5=9C=A8=E6=BB=
+=A1=E8=B6=B3=E8=A6=81=E6=B1=82=E7=9A=84=E6=95=B0=E6=8D=AE=EF=BC=8C=E5=88=99=
+=E5=B0=86=E5=85=A8=E9=87=8F=E6=9B=B4=E6=96=B0=E3=80=82=E6=9B=B4=E6=96=B0=E7=
+=9A=84=E6=97=B6=E9=97=B4=E8=8C=83=E5=9B=B4=E4=B8=BA2017.01.01=E8=87=B3=E4=
+=BB=8A=EF=BC=88<code>exec count(*) from sTab where DECLARE_DATE &gt;=3Dstar=
+t and DECLARE_DATE &lt; end and IS_UPDATE_FLAG =3D true</code>=EF=BC=89</p>=
+</li>
+</ul>
+<h2 id=3D"id-=E7=94=B5=E5=AD=90=E5=8F=A3=E5=B2=B8ODS=E5=B1=82=E8=84=9A=E6=
+=9C=AC=E6=A2=B3=E7=90=86-3.=E8=84=9A=E6=9C=AC=E9=80=BB=E8=BE=91">3. =E8=84=
+=9A=E6=9C=AC=E9=80=BB=E8=BE=91</h2>
+<p>=E6=8B=BC=E7=AE=B1=E4=BB=BB=E5=8A=A1=E6=98=AF=E6=8C=89=E7=85=A7=E5=88=86=
+=E5=8C=BA=E5=8E=BB=E5=BE=AA=E7=8E=AF=E5=A4=84=E7=90=86=E7=9A=84=EF=BC=8C=E4=
+=BB=A5=E4=B8=80=E6=AC=A1=E5=BE=AA=E7=8E=AF=E4=B8=BA=E4=BE=8B=E3=80=82</p>
+<h3 id=3D"id-=E7=94=B5=E5=AD=90=E5=8F=A3=E5=B2=B8ODS=E5=B1=82=E8=84=9A=E6=
+=9C=AC=E6=A2=B3=E7=90=86-3.1=E7=BB=9F=E8=AE=A1=E6=8C=87=E6=A0=87=EF=BC=8C=
+=E5=B9=B6=E7=94=9F=E6=88=90=E7=9B=B8=E5=BA=94=E5=AD=97=E5=85=B8">3.1 =E7=BB=
+=9F=E8=AE=A1=E6=8C=87=E6=A0=87=EF=BC=8C=E5=B9=B6=E7=94=9F=E6=88=90=E7=9B=B8=
+=E5=BA=94=E5=AD=97=E5=85=B8</h3>
+<p>=E9=A6=96=E5=85=88=E6=A0=B9=E6=8D=AE<code>ENTRY_CONTAINER_WIDE</code>=E8=
+=A1=A8=E5=8F=96=E5=87=BA=E8=BF=91=E4=B8=A4=E5=91=A8=E7=9A=84=E6=95=B0=E6=8D=
+=AE=E4=BD=9C=E4=B8=BA<code>updateTab</code>=EF=BC=8C=E5=B9=B6=E4=BB=A5=E6=
+=AD=A4=E5=88=86=E5=88=AB=E7=94=9F=E6=88=90=E5=A6=82=E4=B8=8B=E5=AD=97=E5=85=
+=B8=EF=BC=9A</p>
+<ul>
+<li>
+<p><code>entryContainerDict</code></p></li>
+<li>
+<p><code>containerFlagDict</code></p></li>
+<li>
+<p><code>entryStandardContainerDict</code></p></li>
+</ul>
+<div class=3D"code panel pdl" style=3D"border-width: 1px;">
+<div class=3D"codeContent panelContent pdl">
+<pre class=3D"syntaxhighlighter-pre" data-syntaxhighlighter-params=3D"brush=
+: java; gutter: false; theme: Confluence" data-theme=3D"Confluence">tTab =
+=3D mappingLoadTable("dwd", "ENTRY_LIST_WIDE")
+sTab =3D mappingLoadTable("dwd","ENTRY_CONTAINER_WIDE") &nbsp; &nbsp;=20
+timer updateTab =3D select * from sTab where DECLARE_DATE &gt;=3D(d-7) and =
+DECLARE_DATE &lt;(d+7) &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
+tb.tableInsert(("updateTab","start:"+string(d-7)+" end:"+string(d+7), updat=
+eTab.size()))
+wide =3D sTab
+sTab =3D updateTab
+
+//=E9=81=8D=E5=8E=86sTab=E8=AE=A1=E7=AE=97=E8=87=AA=E7=84=B6=E7=AE=B1=E5=9D=
+=87=E5=88=86=E9=87=8F
+entryContainerDict =3D containerVolume(sTab)
+
+containerFlagDict =3D dict(LONG,BOOL)
+//=E9=81=8D=E5=8E=86tTab=E8=AE=A1=E7=AE=97=E6=A0=87=E5=87=86=E7=AE=B1=E5=9D=
+=87=E5=88=86=E9=87=8F=EF=BC=8C=E6=8B=BC=E7=AE=B1=E6=83=85=E5=86=B5=E5=8F=96=
+=E6=9C=80=E5=A4=9A=E7=9A=84=E6=8A=A5=E5=85=B3=E5=8D=95=E6=A0=87=E7=AE=B1=E9=
+=87=8F
+entryStandardContainerDict =3D standardContainerVolume(sTab, containerFlagD=
+ict)</pre>
+</div>
+</div>
+<p>=E5=85=B6=E6=AC=A1=EF=BC=8C=E5=9F=BA=E4=BA=8E<code>updateTab</code>=E7=
+=9A=84=E6=97=B6=E9=97=B4=E8=8C=83=E5=9B=B4=EF=BC=88=E4=B8=A4=E5=91=A8=EF=BC=
+=89=E6=9F=A5=E8=AF=A2<code>ENTRY_LIST_WIDE</code>=E6=8A=A5=E5=85=B3=E5=8D=
+=95=E8=A1=A8=E4=BD=93=E6=95=B0=E6=8D=AE<strong>=EF=BC=88=E6=B6=89=E5=8F=8A=
+=E5=88=B0ENTRY_LIST_WIDE=EF=BC=8C=E8=AF=A5=E6=AD=A5=E9=AA=A4=E5=86=85=E5=AD=
+=98=E5=8D=A0=E7=94=A8=E6=9E=81=E9=AB=98=EF=BC=89</strong></p>
+<div class=3D"code panel pdl" style=3D"border-width: 1px;">
+<div class=3D"codeContent panelContent pdl">
+<pre class=3D"syntaxhighlighter-pre" data-syntaxhighlighter-params=3D"brush=
+: java; gutter: false; theme: Confluence" data-theme=3D"Confluence">tmpStar=
+t =3D sTab['DECLARE_DATE'].min()
+tmpEnd =3D sTab['DECLARE_DATE'].max()
+dt =3D select ENTRY_ID, count(ENTRY_ID) as CT from tTab where (DECLARE_DATE=
+ between tmpStart and tmpEnd) and &nbsp;opType_ !=3D"D" &nbsp;group by ENTR=
+Y_ID
+entryCountDict =3D dict(dt.ENTRY_ID, dt.CT)</pre>
+</div>
+</div>
+<h3 id=3D"id-=E7=94=B5=E5=AD=90=E5=8F=A3=E5=B2=B8ODS=E5=B1=82=E8=84=9A=E6=
+=9C=AC=E6=A2=B3=E7=90=86-3.2=E4=BE=9D=E6=8D=AE=E5=AD=97=E5=85=B8=EF=BC=8C=
+=E6=9B=B4=E6=96=B0=E5=88=86=E5=B8=83=E5=BC=8F=E8=A1=A8">3.2 =E4=BE=9D=E6=8D=
+=AE=E5=AD=97=E5=85=B8=EF=BC=8C=E6=9B=B4=E6=96=B0=E5=88=86=E5=B8=83=E5=BC=8F=
+=E8=A1=A8</h3>
+<p>=E6=9C=80=E5=90=8E=EF=BC=8C=E5=88=86=E5=88=AB=E5=8F=96=E5=87=BA=E8=BF=91=
+=E4=B8=80=E5=91=A8=E7=9A=84<code>ENTRY_LIST_WIDE</code>=E4=BB=A5=E5=8F=8A<c=
+ode>ENTRY_CONTAINER_WIDE</code>=E6=95=B0=E6=8D=AE=EF=BC=88=E5=8D=95=E4=B8=
+=80=E5=88=86=E5=8C=BA=EF=BC=89=E4=BD=9C=E4=B8=BA=E5=86=85=E5=AD=98=E8=A1=A8=
+<code>t</code><strong>=EF=BC=88=E6=B6=89=E5=8F=8A=E5=88=B0ENTRY_LIST_WIDE=
+=EF=BC=8C=E8=AF=A5=E6=AD=A5=E9=AA=A4=E5=86=85=E5=AD=98=E5=8D=A0=E7=94=A8=E6=
+=9E=81=E9=AB=98=EF=BC=89</strong>,=E5=B9=B6=E9=92=88=E5=AF=B9=E5=86=85=E5=
+=AD=98=E8=A1=A8=E5=88=86=E5=88=AB=E8=BF=9B=E8=A1=8C=E8=B5=8B=E5=80=BC=E6=93=
+=8D=E4=BD=9C=EF=BC=8C=E6=9C=80=E5=90=8E=E5=86=8Dappend=E5=88=B0<code>ENTRY_=
+LIST_WIDE</code>=E4=BB=A5=E5=8F=8A<code>ENTRY_CONTAINER_WIDE</code>=E5=88=
+=86=E5=8C=BA=E8=A1=A8</p>
+<ul>
+<li>
+<p><code>ENTRY_LIST_WIDE</code>=E6=9B=B4=E6=96=B0</p></li>
+</ul>
+<div class=3D"code panel pdl" style=3D"border-width: 1px;">
+<div class=3D"codeContent panelContent pdl">
+<pre class=3D"syntaxhighlighter-pre" data-syntaxhighlighter-params=3D"brush=
+: java; gutter: false; theme: Confluence" data-theme=3D"Confluence">// =E5=
+=86=85=E5=AD=98=E8=B5=8B=E5=80=BC=E6=93=8D=E4=BD=9C
+eid =3D entryContainerDict.keys()
+t =3D select * from tTab where DECLARE_DATE &gt;=3Dstart and DECLARE_DATE &=
+lt; end and ENTRY_ID in eid and opType_ !=3D"D"; &nbsp;=20
+t['CONTAINER']=3DentryContainerDict[t['ENTRY_ID']]
+t['STANDARD_CONTAINER']=3DentryStandardContainerDict[t['ENTRY_ID']]
+t['DEC_CONTAINER']=3DentryContainerDict[t['ENTRY_ID']]\entryCountDict[t['EN=
+TRY_ID']]
+t['DEC_STANDARD_CONTAINER']=3DentryStandardContainerDict[t['ENTRY_ID']]\ent=
+ryCountDict[t['ENTRY_ID']]
+t['CONTAINER_FLAG']=3DcontainerFlagDict[t['ENTRY_ID']]
+// =E9=87=8D=E6=96=B0=E6=8E=92=E5=88=97=EF=BC=8C=E6=9C=80=E5=90=8Eappend!
+reorderColumns!(t, tTab.schema().colDefs.name)
+tTab.append!(t)</pre>
+</div>
+</div>
+<ul>
+<li>
+<p><code>ENTRY_CONTAINER_WIDE</code>=E6=9B=B4=E6=96=B0</p></li>
+</ul>
+<div class=3D"code panel pdl" style=3D"border-width: 1px;">
+<div class=3D"codeContent panelContent pdl">
+<pre class=3D"syntaxhighlighter-pre" data-syntaxhighlighter-params=3D"brush=
+: java; gutter: false; theme: Confluence" data-theme=3D"Confluence">// =E5=
+=86=85=E5=AD=98=E8=B5=8B=E5=80=BC=E6=93=8D=E4=BD=9C
+t =3D select * from sTab where DECLARE_DATE &gt;=3Dstart and DECLARE_DATE &=
+lt; end and &nbsp;ENTRY_ID in eid and opType_ !=3D"D"
+t['IS_UPDATE_FLAG'] =3D true
+// =E9=87=8D=E6=96=B0=E6=8E=92=E5=88=97=EF=BC=8C=E6=9C=80=E5=90=8Eappend!
+reorderColumns!(t, sTab.schema().colDefs.name)
+wide.append!(t)</pre>
+</div>
+</div>
+<p></p>
+<h2 id=3D"id-=E7=94=B5=E5=AD=90=E5=8F=A3=E5=B2=B8ODS=E5=B1=82=E8=84=9A=E6=
+=9C=AC=E6=A2=B3=E7=90=86-=E4=BA=8C=E3=80=81=E5=AE=BD=E8=A1=A8=E5=90=88=E6=
+=88=90=E4=BB=BB=E5=8A=A1"><strong>=E4=BA=8C=E3=80=81=E5=AE=BD=E8=A1=A8=E5=
+=90=88=E6=88=90=E4=BB=BB=E5=8A=A1</strong></h2>
+<h2 id=3D"id-=E7=94=B5=E5=AD=90=E5=8F=A3=E5=B2=B8ODS=E5=B1=82=E8=84=9A=E6=
+=9C=AC=E6=A2=B3=E7=90=86-1.=E8=A1=A8=E5=AF=B9=E8=B1=A1.1">1. =E8=A1=A8=E5=
+=AF=B9=E8=B1=A1</h2>
+<ul>
+<li>
+<p>=E7=9B=AE=E6=A0=87=E8=A1=A8</p></li>
+</ul>
+<p><code>ENTRY_LIST_WIDE</code>=EF=BC=9A369=E5=88=97=EF=BC=8C=E6=8C=89=E5=
+=91=A8=E5=88=86=E5=8C=BA=EF=BC=8C=E8=AE=B0=E5=BD=95=E9=9B=86=E8=A3=85=E7=AE=
+=B1=E6=95=B0=E6=8D=AE=E7=9A=84=E5=AE=BD=E8=A1=A8</p>
+<p><code>ENTRY_CONTAINER_WIDE</code>=EF=BC=9A30=E5=88=97=EF=BC=8C=E6=8C=89=
+=E5=91=A8=E5=88=86=E5=8C=BA=EF=BC=8C=E8=AE=B0=E5=BD=95=E9=9B=86=E8=A3=85=E7=
+=AE=B1=E7=9A=84=E6=B5=B7=E5=85=B3=E7=BC=96=E5=8F=B7=E3=80=81=E9=9B=86=E8=A3=
+=85=E7=AE=B1=E7=BC=96=E5=8F=B7=E7=AD=89ID=E4=BF=A1=E6=81=AF</p>
+<ul>
+<li>
+<p>=E6=95=B0=E6=8D=AE=E6=BA=90=E8=A1=A8</p></li>
+</ul>
+<p></p>
+<h2 id=3D"id-=E7=94=B5=E5=AD=90=E5=8F=A3=E5=B2=B8ODS=E5=B1=82=E8=84=9A=E6=
+=9C=AC=E6=A2=B3=E7=90=86-2.=E4=B8=9A=E5=8A=A1=E7=9B=AE=E7=9A=84.1">2. =E4=
+=B8=9A=E5=8A=A1=E7=9B=AE=E7=9A=84</h2>
+<p>=E5=AE=9A=E6=97=B6=E8=AE=A1=E7=AE=97=E9=9B=86=E8=A3=85=E7=AE=B1=E4=BB=BB=
+=E5=8A=A1</p>
+<ul>
+<li>
+<p>=E5=A2=9E=E9=87=8F=E6=9B=B4=E6=96=B0=EF=BC=9A=E6=A0=B9=E6=8D=AE=E5=AE=9E=
+=E6=97=B6=E6=95=B0=E6=8D=AE=EF=BC=8C=E5=8F=AA=E6=9B=B4=E6=96=B0=E8=BF=91=E4=
+=B8=A4=E4=B8=AA=E6=9C=88=E6=95=B0=E6=8D=AE</p></li>
+<li>
+<p>=E5=85=A8=E9=87=8F=E6=9B=B4=E6=96=B0=EF=BC=9A=E8=8B=A5=E5=8F=91=E7=8E=B0=
+<code>ENTRY_CONTAINER_WIDE</code>=E8=A1=A8=E4=B8=8D=E5=AD=98=E5=9C=A8=E6=BB=
+=A1=E8=B6=B3=E8=A6=81=E6=B1=82=E7=9A=84=E6=95=B0=E6=8D=AE=EF=BC=8C=E5=88=99=
+=E5=B0=86=E5=85=A8=E9=87=8F=E6=9B=B4=E6=96=B0=E3=80=82=E6=9B=B4=E6=96=B0=E7=
+=9A=84=E6=97=B6=E9=97=B4=E8=8C=83=E5=9B=B4=E4=B8=BA2017.01.01=E8=87=B3=E4=
+=BB=8A=EF=BC=88<code>exec count(*) from sTab where DECLARE_DATE &gt;=3Dstar=
+t and DECLARE_DATE &lt; end and IS_UPDATE_FLAG =3D true</code>=EF=BC=89</p>=
+</li>
+</ul>
+<h2 id=3D"id-=E7=94=B5=E5=AD=90=E5=8F=A3=E5=B2=B8ODS=E5=B1=82=E8=84=9A=E6=
+=9C=AC=E6=A2=B3=E7=90=86-3.=E8=84=9A=E6=9C=AC=E9=80=BB=E8=BE=91.1">3. =E8=
+=84=9A=E6=9C=AC=E9=80=BB=E8=BE=91</h2>
+    </div>
+</body>
+</html>
+------=_Part_6_1160025186.1714100818711--
