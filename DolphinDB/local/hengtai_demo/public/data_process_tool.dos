@@ -1,0 +1,417 @@
+def get_database(path){
+	if (existsDatabase(path) == 1){
+		db = database(path)
+	}else{
+		db1 = database(, HASH, [SYMBOL, int(SF_TS_STRG_PARAM.DbSet_HashNum)])
+		db2 = database(, partitionType=VALUE, partitionScheme=SF_TS_STRG_PARAM[`ProtectSttDate]..2024.01.01)
+		db = database(directory=path, partitionType=COMPO, partitionScheme=[db1, db2])
+	}
+	return db
+}
+
+
+def get_database2(path, task_names){
+	if (existsDatabase(path) == 1){
+		db = database(path)
+	}else{
+		db1 = database(, partitionType=VALUE, partitionScheme=task_names)
+		db2 = database(, partitionType=VALUE, partitionScheme=SF_TS_STRG_PARAM[`ProtectSttDate]..2024.01.01)
+		db = database(directory=path, partitionType=COMPO, partitionScheme=[db1, db2])
+	}
+	return db
+}
+
+
+def get_TSDB_database(path){
+	if (existsDatabase(path) == 1){
+		db = database(path)
+	}else{
+		db1 = database(, HASH, [SYMBOL, int(SF_TS_STRG_PARAM.DbSet_HashNum)])
+		db2 = database(, partitionType=VALUE, partitionScheme=SF_TS_STRG_PARAM[`ProtectSttDate]..2023.01.01)
+		db = database(directory=path, partitionType=COMPO, partitionScheme=[db1, db2], engine = 'TSDB')
+	}
+	return db
+}
+
+
+def get_TSDB_database2(path, task_names){
+	if (existsDatabase(path) == 1){
+		db = database(path)
+	}else{
+		db1 = database(, partitionType=VALUE, partitionScheme=task_names)
+		db2 = database(, partitionType=VALUE, partitionScheme=SF_TS_STRG_PARAM[`ProtectSttDate]..2023.01.01)
+		db = database(directory=path, partitionType=COMPO, partitionScheme=[db1, db2], engine = 'TSDB')
+	}
+	return db
+}
+
+
+def get_data_sublist(data, num){
+	data_sublist = []
+	if (num == 1){
+		data_sublist.append!(data)
+	}else{
+		cell = size(data) / num    // int(size(data) / 9)
+		for (i in 1..(num - 1)){
+			print((i-1) * cell)
+			print(i * cell)
+			data_sublist.append!(data[((i - 1) * cell) : (i * cell)])
+		}
+		data_sublist.append!(data[i * cell:])
+	}
+	return data_sublist
+}
+
+
+def drop_Database(db_nm){
+	db = database(db_nm)
+	dbtb_list = getTables(db)
+	for (dbtb_nm in dbtb_list){
+		dropTable(db, dbtb_nm)
+	}
+	dropDatabase(db_nm)
+	return 1
+}
+
+
+def split_tbcol(sss, split_by1, split_by2, cut_loc1, cut_loc2){
+	if (split_by1 == 0){
+		srst = split(sss, split_by2)[0]
+	}else if (split_by2 == 0){
+		srst = split(sss, split_by1)[1]
+	}else{
+		srst = split(sss, split_by1)[1]
+		srst = split(srst, split_by2)[0]
+	}
+	if (cut_loc1 > 0 or  cut_loc2 > 0){
+		rst = srst[cut_loc1:cut_loc2]
+	}
+	else{
+		rst = srst
+	}
+	return rst
+}
+
+
+def vector_split_col(sss_vc, split_by, iloc){
+	sss = peach(split_tbcol{, split_by, iloc}, sss_vc)
+	return sss
+}
+
+
+def pull_XsetQuatile(factor_tb, ruler_tb, qtl_ratio){
+	// factor_tb 为纵表
+    // fcols = factor_tb.columnNames()
+	if (type(ruler_tb) != 27){
+		update factor_tb set qtl_l = quantile(factor_value, qtl_ratio), qtl_r = quantile(factor_value, 1-qtl_ratio) context by factor_name, secu_code
+		update factor_tb set factor_value = iif(factor_value < qtl_l, qtl_l, factor_value)
+		update factor_tb set factor_value = iif(factor_value > qtl_r, qtl_r, factor_value)
+		return factor_tb
+	}else{
+		factor_tb2 = ej(factor_tb, ruler_tb, `secu_code `factor_name)
+		update factor_tb2 set factor_value = iif(factor_value < qtl_l, qtl_l, factor_value)
+		update factor_tb2 set factor_value = iif(factor_value > qtl_r, qtl_r, factor_value)
+		factor_tb2 = select biz_index, secu_code, trade_date, factor_name, factor_value from factor_tb2
+		return factor_tb2
+	}
+}
+
+
+def pull_QuantileRuler(factor_tb){
+	ruler_tb = select first(qtl_l) as qtl_l, first(qtl_r) as qtl_r from factor_tb group by factor_name, secu_code
+	return ruler_tb
+}
+
+
+def ema_dataset(factor_tb, window){
+	update factor_tb set factor_value = ema(factor_value, window) context by secu_code, factor_name, trade_date
+	return factor_tb
+}
+
+
+def standardize_XsetZsore(factor_tb, ruler_tb, cancel_list){
+	// factor_tb 为纵表
+	if (size(cancel_list) == 0){
+		cancel_list2 = [`NULL]
+	}else{
+		cancel_list2 = cancel_list
+	}
+	if (type(ruler_tb) != 27){
+		update factor_tb set favg = avg(factor_value), fstd = stdp(factor_value) context by factor_name, secu_code
+		update factor_tb set factor_value = (factor_value - favg) \ fstd where not (factor_name in cancel_list2)
+		update factor_tb set factor_value = factor_value.nullFill(0.0)
+		return factor_tb
+	}else{
+		factor_tb2 = ej(factor_tb, ruler_tb, `secu_code `factor_name)
+		update factor_tb2 set factor_value = (factor_value - favg) \ fstd where not (factor_name in cancel_list2)
+		factor_tb2 = select biz_index, secu_code, trade_date, factor_name, factor_value from factor_tb2
+		update factor_tb2 set factor_value = factor_value.nullFill(0.0)
+		return factor_tb2
+	}
+}
+
+
+def pull_ZsoreRuler(factor_tb){
+	ruler_tb = select first(favg) as favg, first(fstd) as fstd from factor_tb group by factor_name, secu_code
+	// update ruler_tb set favg = 0.0, fstd = 1.0 where not (factor_name in cancel_list)
+	return ruler_tb
+}
+
+//code = `002865
+//qtl_ratio = 0.0000001
+//ma_win = 3
+//zscore_thres = 1
+//fcol = fcols[0]
+def DprocessTrain_atom(factor_tb, code, qtl_ratio, ma_win, zscore_thres, cancel_list){
+	fcols = factor_tb.columnNames()[4:]
+	factor_tb2 = select * from factor_tb where secu_code = code
+	qtl_ruler_tb = table([code] as secu_code)
+	scl_ruler_tb = table([code] as secu_code)
+	for (fcol in fcols){
+		update factor_tb2 set temp_val = factor_tb2[fcol]
+		if (qtl_ratio > 0){
+			qtl_l = quantile(factor_tb2[fcol], qtl_ratio)
+			qtl_r = quantile(factor_tb2[fcol], 1 - qtl_ratio)
+			update factor_tb2 set temp_val = iif(temp_val < qtl_l, qtl_l, temp_val)
+			update factor_tb2 set temp_val = iif(temp_val > qtl_r, qtl_r, temp_val)
+			sqlUpdate(qtl_ruler_tb, sqlColAlias(<qtl_l>, fcol + `_qtl_l)).eval()
+			sqlUpdate(qtl_ruler_tb, sqlColAlias(<qtl_r>, fcol + `_qtl_r)).eval()
+		}else{
+			sqlUpdate(qtl_ruler_tb, sqlColAlias(<0.0>, fcol + `_qtl_l)).eval()
+			sqlUpdate(qtl_ruler_tb, sqlColAlias(<0.0>, fcol + `_qtl_r)).eval()
+		}
+		if (ma_win > 0){
+			update factor_tb2 set temp_val = ema(temp_val, ma_win) context by trade_date
+		}
+		if (zscore_thres > 0){
+			if (fcol in cancel_list){
+				favg = 0
+				fstd = 1
+			}else{
+				favg = avg(factor_tb2[fcol])
+				fstd = stdp(factor_tb2[fcol])
+			}
+			update factor_tb2 set temp_val = (temp_val - favg) \ fstd
+			update factor_tb2 set temp_val = temp_val.nullFill(0.0)
+			sqlUpdate(scl_ruler_tb, sqlColAlias(<favg>, fcol + `_favg)).eval()
+			sqlUpdate(scl_ruler_tb, sqlColAlias(<fstd>, fcol + `_fstd)).eval()
+		}else{
+			sqlUpdate(scl_ruler_tb, sqlColAlias(<0.0>, fcol + `_favg)).eval()
+			sqlUpdate(scl_ruler_tb, sqlColAlias(<1.0>, fcol + `_fstd)).eval()
+		}
+		sqlUpdate(factor_tb2, sqlColAlias(<factor_tb2[`temp_val]>, fcol)).eval()
+	}
+	factor_tb2 = sql(select=sqlCol([`biz_index, `secu_code, `trade_date, `trade_time] <- fcols), from=factor_tb2).eval()
+	return factor_tb2, qtl_ruler_tb, scl_ruler_tb
+}
+
+
+def DprocessTrain_parallel(factor_tb, secu_list, qtl_ratio, ma_win, zscore_thres, cancel_list){
+	if (size(cancel_list) == 0){
+		cancel_list2 = [`NULL]
+	}else{
+		cancel_list2 = cancel_list
+	}
+	data_tbs = ploop(DprocessTrain_atom{factor_tb, , qtl_ratio, ma_win, zscore_thres, cancel_list2}, secu_list)
+	for (i in 0..(data_tbs.size() - 1)){
+		if (i ==0){
+			factor_tb2 = data_tbs[i][0]
+			qtl_ruler_tb = data_tbs[i][1]
+			scl_ruler_tb = data_tbs[i][2]
+		}else{
+			factor_tb2.append!(data_tbs[i][0])
+			qtl_ruler_tb.append!(data_tbs[i][1])
+			scl_ruler_tb.append!(data_tbs[i][2])
+		}
+	}
+	return factor_tb2, qtl_ruler_tb, scl_ruler_tb
+}
+
+
+def DprocessInfer_atom(factor_tb, code, qtl_ratio, ma_win, zscore_thres, qtl_ruler_tb, scl_ruler_tb){
+	fcols = factor_tb.columnNames()[4:]
+	factor_tb2 = select * from factor_tb where secu_code = code
+	qtl_ruler_tb2 = select * from qtl_ruler_tb where secu_code = code
+	scl_ruler_tb2 = select * from scl_ruler_tb where secu_code = code
+	for (fcol in fcols){
+		update factor_tb2 set temp_val = factor_tb2[fcol]
+		if (qtl_ratio > 0){
+			qtl_l = firstNot(qtl_ruler_tb2[fcol + `_qtl_l])
+			qtl_r = firstNot(qtl_ruler_tb2[fcol + `_qtl_r])
+			update factor_tb2 set temp_val = iif(temp_val < qtl_l, qtl_l, temp_val)
+			update factor_tb2 set temp_val = iif(temp_val > qtl_r, qtl_r, temp_val)
+		}
+		if (ma_win > 0){
+			update factor_tb2 set temp_val = ema(temp_val, ma_win) context by trade_date
+		}
+		if (zscore_thres > 0){
+			favg = firstNot(scl_ruler_tb2[fcol + `_favg])
+			fstd = firstNot(scl_ruler_tb2[fcol + `_fstd])
+			update factor_tb2 set temp_val = (temp_val - favg) \ fstd
+			update factor_tb2 set temp_val = temp_val.nullFill(0.0)
+		}
+		sqlUpdate(factor_tb2, sqlColAlias(<factor_tb2[`temp_val]>, fcol)).eval()
+	}
+	factor_tb2 = sql(select=sqlCol([`biz_index, `secu_code, `trade_date, `trade_time] <- fcols), from=factor_tb2).eval()
+	return factor_tb2
+}
+
+
+def DprocessInfer_parallel(factor_tb, secu_list, qtl_ratio, ma_win, zscore_thres, qtl_ruler_tb, scl_ruler_tb){
+	data_tbs = ploop(DprocessInfer_atom{factor_tb, , qtl_ratio, ma_win, zscore_thres, qtl_ruler_tb, scl_ruler_tb}, secu_list)
+	for (i in 0..(data_tbs.size() - 1)){
+		if (i ==0){
+			factor_tb2 = data_tbs[i]
+		}else{
+			factor_tb2.append!(data_tbs[i])
+		}
+	}
+	return factor_tb2
+}
+
+
+def DprocessTrain_atom2(factor_tb, code, qtl_ratio, ma_win, std_thres, cancel_list){
+	// std instead of zscore
+	fcols = factor_tb.columnNames()[4:]
+	factor_tb2 = select * from factor_tb where secu_code = code
+	qtl_ruler_tb = table([code] as secu_code)
+	scl_ruler_tb = table([code] as secu_code)
+	for (fcol in fcols){
+		update factor_tb2 set temp_val = factor_tb2[fcol]
+		if (qtl_ratio > 0){
+			qtl_l = quantile(factor_tb2[fcol], qtl_ratio)
+			qtl_r = quantile(factor_tb2[fcol], 1 - qtl_ratio)
+			update factor_tb2 set temp_val = iif(temp_val < qtl_l, qtl_l, temp_val)
+			update factor_tb2 set temp_val = iif(temp_val > qtl_r, qtl_r, temp_val)
+			sqlUpdate(qtl_ruler_tb, sqlColAlias(<qtl_l>, fcol + `_qtl_l)).eval()
+			sqlUpdate(qtl_ruler_tb, sqlColAlias(<qtl_r>, fcol + `_qtl_r)).eval()
+		}else{
+			sqlUpdate(qtl_ruler_tb, sqlColAlias(<0.0>, fcol + `_qtl_l)).eval()
+			sqlUpdate(qtl_ruler_tb, sqlColAlias(<0.0>, fcol + `_qtl_r)).eval()
+		}
+		if (ma_win > 0){
+			update factor_tb2 set temp_val = ema(temp_val, ma_win) context by trade_date
+		}
+		if (std_thres > 0){
+			if (fcol in cancel_list){
+				fstd = 1
+			}else{
+				fstd = stdp(factor_tb2[fcol])
+			}
+			update factor_tb2 set temp_val = (temp_val \ fstd).nullFill(0.0)
+			sqlUpdate(scl_ruler_tb, sqlColAlias(<fstd>, fcol + `_fstd)).eval()
+		}else{
+			sqlUpdate(scl_ruler_tb, sqlColAlias(<1.0>, fcol + `_fstd)).eval()
+		}
+		sqlUpdate(factor_tb2, sqlColAlias(<factor_tb2[`temp_val]>, fcol)).eval()
+	}
+	factor_tb2 = sql(select=sqlCol([`biz_index, `secu_code, `trade_date, `trade_time] <- fcols), from=factor_tb2).eval()
+	return factor_tb2, qtl_ruler_tb, scl_ruler_tb
+}
+
+
+def DprocessTrain_parallel2(factor_tb, secu_list, qtl_ratio, ma_win, std_thres, cancel_list){
+	if (size(cancel_list) == 0){
+		cancel_list2 = [`NULL]
+	}else{
+		cancel_list2 = cancel_list
+	}
+	data_tbs = ploop(DprocessTrain_atom2{factor_tb, , qtl_ratio, ma_win, std_thres, cancel_list2}, secu_list)
+	for (i in 0..(data_tbs.size() - 1)){
+		if (i ==0){
+			factor_tb2 = data_tbs[i][0]
+			qtl_ruler_tb = data_tbs[i][1]
+			scl_ruler_tb = data_tbs[i][2]
+		}else{
+			factor_tb2.append!(data_tbs[i][0])
+			qtl_ruler_tb.append!(data_tbs[i][1])
+			scl_ruler_tb.append!(data_tbs[i][2])
+		}
+	}
+	return factor_tb2, qtl_ruler_tb, scl_ruler_tb
+}
+
+
+def DprocessInfer_atom2(factor_tb, code, qtl_ratio, ma_win, std_thres, qtl_ruler_tb, scl_ruler_tb){
+	fcols = factor_tb.columnNames()[4:]
+	factor_tb2 = select * from factor_tb where secu_code = code
+	qtl_ruler_tb2 = select * from qtl_ruler_tb where secu_code = code
+	scl_ruler_tb2 = select * from scl_ruler_tb where secu_code = code
+	for (fcol in fcols){
+		update factor_tb2 set temp_val = factor_tb2[fcol]
+		if (qtl_ratio > 0){
+			qtl_l = firstNot(qtl_ruler_tb2[fcol + `_qtl_l])
+			qtl_r = firstNot(qtl_ruler_tb2[fcol + `_qtl_r])
+			update factor_tb2 set temp_val = iif(temp_val < qtl_l, qtl_l, temp_val)
+			update factor_tb2 set temp_val = iif(temp_val > qtl_r, qtl_r, temp_val)
+		}
+		if (ma_win > 0){
+			update factor_tb2 set temp_val = ema(temp_val, ma_win) context by trade_date
+		}
+		if (std_thres > 0){
+			fstd = firstNot(scl_ruler_tb2[fcol + `_fstd])
+			update factor_tb2 set temp_val = (temp_val \ fstd).nullFill(0.0)
+		}
+		sqlUpdate(factor_tb2, sqlColAlias(<factor_tb2[`temp_val]>, fcol)).eval()
+	}
+	factor_tb2 = sql(select=sqlCol([`biz_index, `secu_code, `trade_date, `trade_time] <- fcols), from=factor_tb2).eval()
+	return factor_tb2
+}
+
+
+def DprocessInfer_parallel2(factor_tb, secu_list, qtl_ratio, ma_win, std_thres, qtl_ruler_tb, scl_ruler_tb){
+	data_tbs = ploop(DprocessInfer_atom2{factor_tb, , qtl_ratio, ma_win, std_thres, qtl_ruler_tb, scl_ruler_tb}, secu_list)
+	for (i in 0..(data_tbs.size() - 1)){
+		if (i ==0){
+			factor_tb2 = data_tbs[i]
+		}else{
+			factor_tb2.append!(data_tbs[i])
+		}
+	}
+	return factor_tb2
+}
+
+
+def TransformInfer_atom2(model_tb, code, y_scl_ruler_tb, ycol){
+	model_tb2 = select * from model_tb where secu_code = code
+	y_std = select * from y_scl_ruler_tb where secu_code = code
+	y_std = firstNot(y_std[ycol + `_fstd])
+	try{
+		update model_tb2 set ypred = ypred * y_std
+	}catch(ex){
+		update model_tb2 set ypred_l1 = ypred_l1 * y_std, ypred_l2 = ypred_l2 * y_std
+	}
+	return model_tb2
+}
+
+
+def TransformInfer_parallel2(model_tb, secu_list, y_scl_ruler_tb, ycol){
+	data_tbs = ploop(TransformInfer_atom2{model_tb, , y_scl_ruler_tb, ycol}, secu_list)
+	for (i in 0..(data_tbs.size() - 1)){
+		if (i ==0){
+			model_tb2 = data_tbs[i]
+		}else{
+			model_tb2.append!(data_tbs[i])
+		}
+	}
+	return model_tb2
+}
+
+
+def converseXset_d2r(factor_d_tb){
+	factor_tb = select biz_index, secu_code, trade_date, factor_name, factor_value from factor_d_tb
+	factor_tb = select factor_value from factor_tb pivot by biz_index, secu_code, trade_date, factor_name
+	return factor_tb
+}
+
+
+def mend_round_float(val, round_num){
+	val_fix = round(iif(val > 0, val + 1E-7, val - 1E-7), round_num)
+	return float(val_fix)
+}
+
+
+def remendTcol(mutable tb, col){
+	dropColumns!(tb, col)
+    rename!(tb, col + `_t, col)
+}

@@ -1,0 +1,199 @@
+//数据预处理
+def prepareOBData_last_refer(calDate, symbol, OBData, t){
+	/*该函数用于将OB数据聚合按t秒聚合，并对空值进行填补
+	 * symbol 股票代码  "000001"
+	 * calDate 为数据日期 2022.06.08
+	 * OBData为OB数据, loadTable('dfs://TSDB_OB','SZ')
+	 * t 数据聚合时间段  1s
+	 */
+	tmp = select ticker, data_time, last(ask10) as ask10, last(ask9) as ask9, last(ask8) as ask8, last(ask7) as ask7, last(ask6) as ask6, last(ask5) as ask5, last(ask4) as ask4, last(ask3) as ask3, last(ask2) as ask2, last(ask1) as ask1, last(bid10) as bid10, last(bid9) as bid9, last(bid8) as bid8, last(bid7) as bid7, last(bid6) as bid6, last(bid5) as bid5, last(bid4) as bid4, last(bid3) as bid3, last(bid2) as bid2, last(bid1) as bid1, last(askqty10) as askqty10, last(askqty9) as askqty9, last(askqty8) as askqty8, last(askqty7) as askqty7, last(askqty6) as askqty6, last(askqty5) as askqty5, last(askqty4) as askqty4, last(askqty3) as askqty3, last(askqty2) as askqty2, last(askqty1) as askqty1, last(bidqty10) as bidqty10, last(bidqty9) as bidqty9, last(bidqty8) as bidqty8, last(bidqty7) as bidqty7, last(bidqty6) as bidqty6, last(bidqty5) as bidqty5, last(bidqty4) as bidqty4, last(bidqty3) as bidqty3, last(bidqty2) as bidqty2, last(bidqty1) as bidqty1 from OBData where date(data_time) = calDate and ticker in symbol group by ticker, interval(data_time, t, 'none') as data_time
+	if(tmp.size() == 0){
+		return tmp
+	}
+	ticker = symbol
+	// 对齐时间窗口, 除完以后就是半天交易时段数据的条数
+	n = 7200000 / t
+	// 构造完整连续的时间序列
+	timeSeries = 09:30:00.000 + 0..(n - 1) * t
+	timeSeries.append!(13:00:00.000 + 0..(n - 1) * t)
+	// 格式化为 timestamp 类型(原表类型为 timestamp)
+	timeSeries = timestamp(take(string(calDate) + 'T', n * 2) + string(timeSeries))
+	// 构造前两列 ticker, data_time
+	demo = table(take(ticker, timeSeries.size() * ticker.size()).sort() as ticker, take(timeSeries, timeSeries.size() * ticker.size()) as data_time)
+	res = lj(demo, tmp,`ticker`data_time)
+	// 处理NULL值, 使用NULL值前的非空元素来填充
+	res = select ticker, data_time, ffill(ask10) as ask10, ffill(ask9) as ask9, ffill(ask8) as ask8, ffill(ask7) as ask7, ffill(ask6) as ask6, ffill(ask5) as ask5, ffill(ask4) as ask4, ffill(ask3) as ask3, ffill(ask2) as ask2, ffill(ask1) as ask1, ffill(bid10) as bid10, ffill(bid9) as bid9, ffill(bid8) as bid8, ffill(bid7) as bid7, ffill(bid6) as bid6, ffill(bid5) as bid5, ffill(bid4) as bid4, ffill(bid3) as bid3, ffill(bid2) as bid2, ffill(bid1) as bid1, ffill(askqty10) as askqty10, ffill(askqty9) as askqty9, ffill(askqty8) as askqty8, ffill(askqty7) as askqty7, ffill(askqty6) as askqty6, ffill(askqty5) as askqty5, ffill(askqty4) as askqty4, ffill(askqty3) as askqty3, ffill(askqty2) as askqty2, ffill(askqty1) as askqty1, ffill(bidqty10) as bidqty10, ffill(bidqty9) as bidqty9,  ffill(bidqty8) as bidqty8, ffill(bidqty7) as bidqty7, ffill(bidqty6) as bidqty6, ffill(bidqty5) as bidqty5, ffill(bidqty4) as bidqty4, ffill(bidqty3) as bidqty3, ffill(bidqty2) as bidqty2, ffill(bidqty1) as bidqty1 from res
+	return res
+}
+
+def prepareOBData_wavg_refer(calDate, symbol, OBData, t, level){
+	// 将 bid, bidqty, ask, askqty 分别拼接为一个数组向量
+	tmp = select ticker, data_time, fixedLengthArrayVector(bid1, bid2, bid3, bid4, bid5, bid6, bid7, bid8, bid9, bid10) as bid, fixedLengthArrayVector(bidqty1, bidqty2, bidqty3, bidqty4, bidqty5, bidqty6, bidqty7, bidqty8, bidqty9, bidqty10) as bidqty, fixedLengthArrayVector(ask1, ask2, ask3, ask4, ask5, ask6, ask7, ask8, ask9, ask10) as ask, fixedLengthArrayVector(askqty1, askqty2, askqty3, askqty4, askqty5, askqty6, askqty7, askqty8, askqty9, askqty10) as askqty from OBData where date(data_time) = calDate and ticker in symbol
+	// 按成交量加权计算买卖五档加权中间价
+	tmp = select ticker, data_time, ((each(sum, ask[0:level] * askqty[0:level]) \ each(sum, askqty[0:level]) ) +(each(sum, bid[0:level] * bidqty[0:level]) \ each(sum, bidqty[0:level]))) \ 2 as midwaskbid from tmp
+	// 高开低收
+	tmp = select ticker, data_time, first(midwaskbid) as first_price, last(midwaskbid) as last_price, max(midwaskbid) as high_price, min(midwaskbid) as low_price, last(midwaskbid) as mid_price from tmp group by ticker, interval(data_time, t, 'none') as data_time
+	if(tmp.size() == 0){
+		return tmp
+	}	
+	ticker = symbol
+	// 对齐时间窗口, 除完以后就是半天交易时段数据的条数
+	n = 7200000 / t
+	// 构造完整连续的时间序列
+	timeSeries = 09:30:00.000 + 0..(n - 1) * t
+	timeSeries.append!(13:00:00.000 + 0..(n - 1) * t)
+	// 格式化为 timestamp 类型(原表类型为 timestamp)
+	timeSeries = timestamp(take(string(calDate) + 'T', n * 2) + string(timeSeries))
+	demo = table(take(ticker, timeSeries.size() * ticker.size()).sort() as ticker, take(timeSeries, timeSeries.size() * ticker.size()) as data_time)
+	res = lj(demo, tmp, `ticker`data_time)
+	// 处理NULL值, 使用NULL值前的非空元素来填充
+	res = select ticker, data_time, ffill(first_price) as first_price, ffill(last_price) as last_price, ffill(high_price) as high_price, ffill(low_price) as low_price, ffill(mid_price) as mid_price from res
+	return res
+}
+
+
+def get_initialPoints_refer(mid_price, turning_points, reversal_points){
+	len = turning_points.size()
+	initPoint = array(DOUBLE,0,len)
+	init_id = array(INT,0,len)
+	interval_id = array(INT,0,len)
+	p1 = mid_price[0]
+	p2 = mid_price[0]
+	p3 = 0
+	p4 = 0
+	id = 1
+	has_turning=false
+	for (i in 0..(len-1)){
+		if (reversal_points[i]==1){
+			p1 = p2
+			p3 = p4
+			if (has_turning==true){
+				id += 1
+				has_turning=false
+			}
+		}
+		if (turning_points[i]==1){
+			p2 = mid_price[i]
+			p4 = i
+			has_turning=true
+		}
+		initPoint.append!(p1)
+		init_id.append!(p3)
+		interval_id.append!(id)
+	}
+	return initPoint, init_id, interval_id
+}
+
+def getDS(price, win){
+	return ((price - mavg(price, win, 1)) \ mavg(price, win, 1)) * 100
+}
+
+// ifWavg: 是否计算加权平均数
+def getReferData(calDate, referSymbols, threshold, OBData, t, ifWavg, level, momentum_factors, symbol){// threshold = referThreshold
+	for(i in calDate){
+		if(i == calDate[0]){
+			if (ifWavg == true){
+				// 计算按成交量加权计算买卖五档加权中间价, 高开低收
+				referData = prepareOBData_wavg_refer(i, referSymbols, OBData, t, level)
+			}
+			else{
+				// 按 t 秒聚合, 填补空值
+				referData = prepareOBData_last_refer(i, referSymbols, OBData, t)
+			}
+		}
+		else{
+			if (ifWavg == true){
+				refer_tmp = prepareOBData_wavg_refer(i, referSymbols, OBData, t, level)
+			}
+			else{
+				refer_tmp = prepareOBData_last_refer(i, referSymbols, OBData, t)
+			}
+			referData.append!(refer_tmp)
+			undef("refer_tmp")
+		}
+	}
+	// 不计算加权平均数
+	if (ifWavg == false){
+		referData = select avg((ask1 + bid1) \ 2) as mid_price from referData group by data_time
+		referData = select data_time, concat(referSymbols, ",") as ticker, mid_price from referData
+	}
+	else{
+		referData = select avg(first_price) as first_price, avg(last_price) as last_price, avg(high_price) as high_price, avg(low_price) as low_price, avg(mid_price) as mid_price from referData group by data_time
+		referData = select data_time, concat(referSymbols,",") as ticker, first_price, last_price, high_price, low_price, mid_price from referData
+	}
+	dayLen = referData.size() / calDate.size()
+	// 预设turning_points, reversal_points, high_low_points
+	referData = select take(0..(dayLen - 1), referData.size()) as id, data_time, ticker, mid_price, int(NULL) as turning_points, int(NULL) as reversal_points, int(0) as high_low_points from referData
+	// 处理turning_points, reversal_points
+	for(i in calDate){// i = calDate[0]
+		price = exec mid_price from referData where date(data_time) = i
+		turning_points, reversal_points = get_reversal_points(price, threshold)
+		
+		id = exec id from referData where date(data_time) = i
+		ids = iif(id in turning_points, 1, 0)
+		update referData set turning_points = ids where date(data_time) = i
+		ids = iif(id in reversal_points, 1, 0)
+		update referData set reversal_points = ids where date(data_time) = i
+	}
+	// 处理high_low_points, 最高最低点
+	update referData set high_low_points = iif(turning_points == 1, iif(isPeak(mid_price, false) == 1, 1, -1), 0)
+	// 计算上一个转折点的 mid_price 及对应的 id
+	referData = select *, get_initialPoints_refer(mid_price, turning_points, reversal_points) as `initialPoints`initialId`interval_id from referData context by date(data_time)
+	// 剔除14: 57后的数据
+	referData = removeDailyTimeSeries(referData)
+
+	tmp = referData
+	// 删除表数据, 保留表结构
+	delete from referData
+	for(idate in calDate){
+		tmp1 = select * from tmp where date(data_time) = idate
+		for(i in 0..(symbol.size() - 1)){
+			referData.append!(tmp1)
+		}
+	}
+
+	tmp = NULL
+	tmp1 = NULL
+
+	update referData set targetTicker = exec ticker from momentum_factors, targetPrice = exec mid_price from momentum_factors, targetInitPoint = (exec mid_price from momentum_factors) at ((exec initialId from referData) + (take((0..(calDate.size() * symbol.size() - 1)), referData.size()) * dayLen).sort()), tickerID = take((0..(calDate.size() * symbol.size() - 1)), referData.size()).sort()
+
+	if (t == 100){
+	referData = select *,
+		// 计算mid_price的最小二乘估计
+		moving(betaPlus, mid_price, 1000 / t,1) as referBeta_1s,
+		moving(betaPlus, mid_price, 3000 / t,1) as referBeta_3s,
+		moving(betaPlus, mid_price, 5000 / t,1) as referBeta_5s,
+		moving(betaPlus, mid_price, 10000 / t,1) as referBeta_10s,
+
+		((mid_price - initialPoints) \ initialPoints) - ((targetPrice - targetInitPoint) \ targetInitPoint) as difAmplitude,
+		// 计算因子价差
+		getDS(mid_price, 10000 / t) - getDS(targetPrice, 10000 / t) as IntermarketDisparity_10s,
+		getDS(mid_price, 20000 / t) - getDS(targetPrice, 20000 / t) as IntermarketDisparity_20s,
+		getDS(mid_price, 30000 / t) - getDS(targetPrice, 30000 / t) as IntermarketDisparity_30s,
+		getDS(mid_price, 60000 / t) - getDS(targetPrice, 60000 / t) as IntermarketDisparity_60s,
+		getDS(mid_price, 120000 / t) - getDS(targetPrice, 120000 / t) as IntermarketDisparity_120s
+		
+		from referData context by date(data_time), tickerID
+	}
+	else{
+		referData = select *,
+		moving(betaPlus, mid_price, 3000 / t, 1) as referBeta_3s,
+		moving(betaPlus, mid_price, 5000 / t, 1) as referBeta_5s,
+		moving(betaPlus, mid_price, 10000/ t, 1) as referBeta_10s,
+
+		((mid_price-initialPoints)\initialPoints)-((targetPrice-targetInitPoint)\targetInitPoint) as difAmplitude,
+
+		getDS(mid_price,10000 / t) - getDS(targetPrice, 10000 / t) as IntermarketDisparity_10s,
+		getDS(mid_price,20000 / t) - getDS(targetPrice, 20000 / t) as IntermarketDisparity_20s,
+		getDS(mid_price,30000 / t) - getDS(targetPrice, 30000 / t) as IntermarketDisparity_30s,
+		getDS(mid_price,60000 / t) - getDS(targetPrice, 60000 / t) as IntermarketDisparity_60s,
+		getDS(mid_price,120000 / t) - getDS(targetPrice, 120000 / t) as IntermarketDisparity_120s
+		
+		from referData context by date(data_time),tickerID
+	}
+	// 计算difAmplitude的最小二乘估计
+	referData = select *, moving(betaPlus, difAmplitude, 30, 1) as difAmplitudeBeta from referData context by date(data_time), tickerID
+	// 调整列顺序
+	referData.reorderColumns!(`id`data_time`ticker`targetTicker)
+	return referData
+}

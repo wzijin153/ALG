@@ -1,0 +1,281 @@
+// ***************** 登陆 ******************//
+
+clearAllCache()
+key_nm = [`DbTitle, `DbQuoteNm]
+key_val = ["dfs://Wm_Stkfuture_", "dfs://Wm_Stkfuture_Quote"]
+key_nm.append!(`FutTickDB)
+key_val.append!("dfs://FutTickDB")
+key_nm.append!(`FutTickTbNm)
+key_val.append!("fut_tick")
+
+key_nm.append!(`StkL2DB)
+key_val.append!("dfs://TL_Level2")
+key_nm.append!(`StkL2EntrustTbNm)
+key_val.append!("entrust")
+key_nm.append!(`StkL2TradeTbNm)
+key_val.append!("trade")
+key_nm.append!(`StkL2SnapTbNm)
+key_val.append!("snapshot")
+
+syncDict(key_nm, key_val, `SF_TS_STRG_VAL)
+undef("SF_TS_STRG_VAL", SHARED)
+
+param_nm = `DbSet_HashNum `ProtectSttDate
+param_val = 10 2023.01.01
+syncDict(param_nm, param_val, `SF_TS_STRG_PARAM)
+undef("SF_TS_STRG_PARAM", SHARED)
+
+// 依次运行以下 txt
+// ./public/data_process_tool.txt , ./message_bus/1_quote_maker.txt , ./message_bus/2_yset_maker.txt , ./message_bus/3_factor_maker.txt
+// 随后所用函数在以上txt中
+// *************************************//
+
+// ***************** 处理行情 ******************//
+// 因子参数//
+qtrade_num = 50      // 逐笔成交数据计算滑动窗口, 如1，50，100，200，400
+qentrust_num = 50      // 逐笔委托数据计算滑动窗口, 如1，50，100，200，400
+sig_num = 50              // 逐笔计算的中间变量合并到某一频率（如20ms）后再计算的滑动窗口，如1，50，100，200，400
+sz_decay_ms = 19
+sh_decay_ms = 1
+
+scope_stt = 09:30:00.000
+scope_end = 14:57:00.000
+rcycle_str = `100ms
+ruler_tb = getRcycleRuler(scope_stt, scope_end, rcycle_str)
+rcycle_dict = getRcycleDict(scope_stt, scope_end, rcycle_str)
+tdate = 2023.02.28
+
+ftitle = `DevDemo
+fname = `ActiveBstrdsclvolavg
+
+// 初始化存放因子的共享dict
+initStk2FutFvalSyncdict(ftitle)
+undef("DevDemo_fval", SHARED)
+
+// 区分市场
+Market = ["SZ", "SH"]
+def init_cal(market, tdate, ruler_tb, rcycle_dict){// market = Market[1]
+	if (market =="SZ"){
+		add_time = 19
+	}else{
+		add_time = 1
+	}
+	entrust_dbtb = loadTable(SF_TS_STRG_VAL.StkL2DB, SF_TS_STRG_VAL.StkL2EntrustTbNm)
+	trade_dbtb = loadTable(SF_TS_STRG_VAL.StkL2DB, SF_TS_STRG_VAL.StkL2TradeTbNm)
+	// 将逐笔委托表按每 10 只股票划分
+	code_all = exec distinct SecurityID from trade_dbtb where Market = market and time(TradeTime) > 09:30:00.000
+	code_list = cut(code_all, 10)
+	// for (id in 0..(code_list.size() - 1)){// id = (0..(code_list.size() - 1))[0]
+	for (id in 0..11){// id = (0..(code_list.size() - 1))[0]
+		codes = code_list[id]
+		entrust_dict = dict(SYMBOL, ANY)
+		trade_dict = dict(SYMBOL, ANY)
+		for (code in codes){// code = codes[0]
+			// 
+			entrust_tb = select * from entrust_dbtb where Market = market and SecurityID = code and time(TradeTime) > 09:30:00.000
+			update entrust_tb set TradeTime_t = time(TradeTime)
+			remendTcol(entrust_tb, `TradeTime)
+			update entrust_tb set TradeTime = TradeTime + add_time
+			entrust_dict[code] = entrust_tb
+			// 
+			trade_tb = select * from trade_dbtb where Market = market and SecurityID = code and time(TradeTime) > 09:30:00.000
+			update trade_tb set TradeTime_t = time(TradeTime)
+			remendTcol(trade_tb, `TradeTime)
+			update trade_tb set TradeTime = TradeTime + add_time
+			trade_dict[code] = trade_tb
+		}
+		print("part_id: " + id)
+		print(" factor init, trade_dict: " + round(memSize(trade_dict) / 1024.0 / 1024.0 / 1024.0, 4) + " Gb, entrust_dict: " + round(memSize(entrust_dict) / 1024.0 / 1024.0 / 1024.0, 4) + " Gb, total_mem: " + round(mem().allocatedBytes / 1024.0 / 1024.0 / 1024.0, 4) + " Gb")
+		for (code in codes){
+			// 初始化因子table
+			factor_tb = initStk2FutFactortb(code, tdate, ruler_tb)
+			//单进程调用
+			calcStk2FutTsfactor(DevDemo_fval, ActiveBstrdsclvolavg, `ActiveBstrdsclvolavg, rcycle_dict, ruler_tb, trade_dict, entrust_dict, code, 50, 100, 50)
+			calcStk2FutTsfactor(DevDemo_fval, ActiveBstrdsclvolavg, `ActiveBstrdsclvolavg, rcycle_dict, ruler_tb, trade_dict, entrust_dict, code, 200, 50, 1)
+			calcStk2FutTsfactor(DevDemo_fval, ActiveBstrdsclvolavg, `ActiveBstrdsclvolavg, rcycle_dict, ruler_tb, trade_dict, entrust_dict, code, 1, 1, 50)
+			// dict里各个key组装到factor_tb
+			formStk2FutFactortb(DevDemo_fval, factor_tb)
+		}
+		print(" factor calc, trade_dict: " + round(memSize(trade_dict) / 1024.0 / 1024.0 / 1024.0, 4) + " Gb, entrust_dict: " + round(memSize(entrust_dict) / 1024.0 / 1024.0 / 1024.0, 4) + " Gb, total_mem: " + round(mem().allocatedBytes / 1024.0 / 1024.0 / 1024.0, 4) + " Gb")
+	}
+}
+
+
+timer init_cal("SZ", tdate, ruler_tb, rcycle_dict)
+
+
+
+// 深圳市场数据获取
+code = `000155
+tdate = 2023.02.28
+dbtb = loadTable(SF_TS_STRG_VAL.StkL2DB, SF_TS_STRG_VAL.StkL2EntrustTbNm)
+entrust_tb = select * from dbtb where SecurityID == `000155 and date(TradeTime) == tdate and time(TradeTime) > 09:30:00.000 limit 5000
+update entrust_tb set TradeTime_t = time(TradeTime)
+remendTcol(entrust_tb, `TradeTime)
+update entrust_tb set TradeTime = TradeTime + sz_decay_ms where Market == `SZ
+
+dbtb = loadTable(SF_TS_STRG_VAL.StkL2DB, SF_TS_STRG_VAL.StkL2TradeTbNm)
+trade_tb = select * from dbtb where SecurityID == `000155 and date(TradeTime) == tdate and time(TradeTime) > 09:30:00.000 limit 5000
+update trade_tb set TradeTime_t = time(TradeTime)
+remendTcol(trade_tb, `TradeTime)
+update trade_tb set TradeTime = TradeTime + sz_decay_ms where Market == `SZ
+
+// 上海市场数据获取
+code = `600010
+tdate = 2023.09.05
+dbtb = loadTable(SF_TS_STRG_VAL.StkL2DB, SF_TS_STRG_VAL.StkL2EntrustTbNm)
+entrust_tb = select * from dbtb where SecurityID == `600010 and date(TradeTime) == tdate and time(TradeTime) > 09:30:00.000 limit 5000
+update entrust_tb set TradeTime_t = time(TradeTime)
+remendTcol(entrust_tb, `TradeTime)
+update entrust_tb set TradeTime = TradeTime + sh_decay_ms where Market == `SH
+
+dbtb = loadTable(SF_TS_STRG_VAL.StkL2DB, SF_TS_STRG_VAL.StkL2TradeTbNm)
+trade_tb = select * from dbtb where SecurityID == `600010 and date(TradeTime) == tdate and time(TradeTime) > 09:30:00.000 limit 5000
+update trade_tb set TradeTime_t = time(TradeTime)
+remendTcol(trade_tb, `TradeTime)
+update trade_tb set TradeTime = TradeTime + sh_decay_ms where Market == `SH
+// *************************************//
+
+// ***************** 因子计算demo ******************//
+// 因子函数举例
+// 深圳市场因子计算
+def ActiveBstrdsclvolavg_sz(rcycle_dict, ruler_tb, trade_tb, entrust_tb, qtrade_num, qentrust_num, sig_num){
+	code_entrust_tb = entrust_tb.copy()
+	code_trdbuy_tb = select * from trade_tb where ExecType == `F and BidApplSeqNum > OfferApplSeqNum
+	code_trdsell_tb = select * from trade_tb where ExecType == `F and BidApplSeqNum < OfferApplSeqNum
+	
+	update code_entrust_tb set active_bid_vol = 0, active_offer_vol = 0
+	update code_entrust_tb set active_bid_vol = OrderQty where ApplSeqNum in code_trdbuy_tb[`BidApplSeqNum]
+	update code_entrust_tb set active_offer_vol = OrderQty where ApplSeqNum in code_trdsell_tb[`OfferApplSeqNum]
+	if (qentrust_num > 1){
+		update code_entrust_tb set active_bid_vol = msum(active_bid_vol, qentrust_num, 2), active_offer_vol = msum(active_offer_vol, qentrust_num, 2)
+	}
+
+	update code_trdbuy_tb set buy_trd_vol = TradeQty
+	update code_trdsell_tb set sell_trd_vol = TradeQty
+	if (qtrade_num > 1){
+		update code_trdbuy_tb set buy_trd_vol = msum(buy_trd_vol, qtrade_num, 2)
+		update code_trdsell_tb set sell_trd_vol = msum(sell_trd_vol, qtrade_num, 2)
+	}
+
+	// !!!!!!!!!!!!!! 注意此处合并成固定时间的方式：select last(active_bid_vol) as active_bid_vol 也可能是 select sum(active_bid_vol) as active_bid_vol， select std(active_bid_vol) as active_bid_vol
+	code_entrust_tb = select last(active_bid_vol) as active_bid_vol, last(active_offer_vol) as active_offer_vol from code_entrust_tb group by dailyAlignedBar(TradeTime, rcycle_dict[`scope_stt], duration(rcycle_dict[`rcycle_str]), rcycle_dict[`scope_end]) as TradeTime
+	code_trdbuy_tb = select last(buy_trd_vol) as buy_trd_vol from code_trdbuy_tb group by dailyAlignedBar(TradeTime, rcycle_dict[`scope_stt], duration(rcycle_dict[`rcycle_str]), rcycle_dict[`scope_end]) as TradeTime
+	code_trdsell_tb = select last(sell_trd_vol) as sell_trd_vol from code_trdsell_tb group by dailyAlignedBar(TradeTime, rcycle_dict[`scope_stt], duration(rcycle_dict[`rcycle_str]), rcycle_dict[`scope_end]) as TradeTime
+	factor_tb = aj(ruler_tb, code_entrust_tb, `k_time, `TradeTime)
+	factor_tb = aj(factor_tb, code_trdbuy_tb, `k_time, `TradeTime)
+	factor_tb = aj(factor_tb, code_trdsell_tb, `k_time, `TradeTime)
+	update factor_tb set active_bid_vol = active_bid_vol.nullFill(0.0), active_offer_vol = active_offer_vol.nullFill(0.0), buy_trd_vol = buy_trd_vol.ffill(), sell_trd_vol = sell_trd_vol.ffill()
+	update factor_tb set factor = 10 * (active_bid_vol \ buy_trd_vol - active_offer_vol \ sell_trd_vol)
+	if (sig_num > 1){
+		update factor_tb set factor = mavg(factor, sig_num, 2)
+	}
+	return factor_tb.factor
+}
+
+def pwj_OdClimbOddotRate_sz(rcycle_dict, ruler_tb, code_trade_tb, code_entrust_tb, qtrade_num, qentrust_num, sig_num) {
+    update code_entrust_tb set vwbuy_n = iif(Side == `1, Price * OrderQty * 0.01, NULL).ffill(), vwbuy_d = iif(Side == `1, OrderQty * 0.01, NULL).ffill() // context by Code
+    update code_entrust_tb set vwsell_n = iif(Side == `2, Price * OrderQty * 0.01, NULL).ffill(), vwsell_d = iif(Side == `2, OrderQty * 0.01, NULL).ffill() // context by Code
+    update code_entrust_tb set volbuy = msum(vwbuy_d, qentrust_num), volsell = msum(vwsell_d, qentrust_num)
+    update code_entrust_tb set vwbuy = msum(vwbuy_n, qentrust_num) \ volbuy, vwsell = msum(vwsell_n, qentrust_num) \ volsell
+    update code_trade_tb set lastprice = iif(ExecType == `F, TradePrice, NULL).ffill()
+    if (qtrade_num > 1) {
+        update code_trade_tb set lastprice = mavg(lastprice, qtrade_num)
+    }
+    factor_tb = pwj(ruler_tb, code_entrust_tb, -500ms:0s, <[last(vwbuy) as "vwbuy", last(vwsell) as "vwsell", last(volbuy) as "volbuy", last(volsell) as "volsell"]>, "TradeTime", "TradeTime")
+    factor_tb = pwj(factor_tb, code_trade_tb, -500ms:0s, <[last(lastprice) as "lastprice"]>, "TradeTime", "TradeTime")
+    update factor_tb set lastprice = iif(lastprice > 0, lastprice, NULL).ffill()
+    update factor_tb set bid_dot_rate = iif(lastprice > vwbuy, volbuy * pow(exp(1 - lastprice \ vwbuy), 2), volbuy)
+    update factor_tb set ask_dot_rate = iif(vwsell > lastprice, volsell * pow(exp(1 - vwsell \  lastprice), 2), volsell)
+    update factor_tb set factor = 0.001 * msum(bid_dot_rate - ask_dot_rate - prev(bid_dot_rate) + prev(ask_dot_rate), sig_num + 1, 1)
+    return factor_tb.factor
+}
+
+
+//上海市场因子计算
+def ActiveBstrdsclvolavg_sh(rcycle_dict, ruler_tb, trade_tb, entrust_tb, qtrade_num, qentrust_num, sig_num){
+	code_entrust_tb = select * from entrust_tb where OrderType = `A
+	code_trdbuy_tb = select * from trade_tb where BidApplSeqNum > OfferApplSeqNum and OfferApplSeqNum > 0
+	code_trdsell_tb = select * from trade_tb where BidApplSeqNum < OfferApplSeqNum and BidApplSeqNum > 0
+	
+	update code_entrust_tb set active_bid_vol = 0, active_offer_vol = 0
+	update code_entrust_tb set active_bid_vol = OrderQty where ApplSeqNum in code_trdbuy_tb[`BidApplSeqNum]
+	update code_entrust_tb set active_offer_vol = OrderQty where ApplSeqNum in code_trdsell_tb[`OfferApplSeqNum]
+	if (qentrust_num > 1){
+		update code_entrust_tb set active_bid_vol = msum(active_bid_vol, qentrust_num, 2), active_offer_vol = msum(active_offer_vol, qentrust_num, 2)
+	}
+
+	update code_trdbuy_tb set buy_trd_vol = TradeQty
+	update code_trdsell_tb set sell_trd_vol = TradeQty
+	if (qtrade_num > 1){
+		update code_trdbuy_tb set buy_trd_vol = msum(buy_trd_vol, qtrade_num, 2)
+		update code_trdsell_tb set sell_trd_vol = msum(sell_trd_vol, qtrade_num, 2)
+	}
+
+	// !!!!!!!!!!!!!! 注意此处合并成固定时间的方式：select last(active_bid_vol) as active_bid_vol 也可能是 select sum(active_bid_vol) as active_bid_vol， select std(active_bid_vol) as active_bid_vol
+	code_entrust_tb = select last(active_bid_vol) as active_bid_vol, last(active_offer_vol) as active_offer_vol from code_entrust_tb group by dailyAlignedBar(TradeTime, rcycle_dict[`scope_stt], duration(rcycle_dict[`rcycle_str]), rcycle_dict[`scope_end]) as TradeTime
+	code_trdbuy_tb = select last(buy_trd_vol) as buy_trd_vol from code_trdbuy_tb group by dailyAlignedBar(TradeTime, rcycle_dict[`scope_stt], duration(rcycle_dict[`rcycle_str]), rcycle_dict[`scope_end]) as TradeTime
+	code_trdsell_tb = select last(sell_trd_vol) as sell_trd_vol from code_trdsell_tb group by dailyAlignedBar(TradeTime, rcycle_dict[`scope_stt], duration(rcycle_dict[`rcycle_str]), rcycle_dict[`scope_end]) as TradeTime
+	factor_tb = aj(ruler_tb, code_entrust_tb, `k_time, `TradeTime)
+	factor_tb = aj(factor_tb, code_trdbuy_tb, `k_time, `TradeTime)
+	factor_tb = aj(factor_tb, code_trdsell_tb, `k_time, `TradeTime)
+	update factor_tb set active_bid_vol = active_bid_vol.nullFill(0.0), active_offer_vol = active_offer_vol.nullFill(0.0), buy_trd_vol = buy_trd_vol.ffill(), sell_trd_vol = sell_trd_vol.ffill()
+	update factor_tb set factor = 10 * (active_bid_vol \ buy_trd_vol - active_offer_vol \ sell_trd_vol)
+	if (sig_num > 1){
+		update factor_tb set factor = mavg(factor, sig_num, 2)
+	}
+	return factor_tb.factor
+}
+
+//最终因子计算
+def bar_ActiveBstrdsclvolavg(rcycle_dict, ruler_tb, trade_tb, entrust_tb, qtrade_num, qentrust_num, sig_num){
+	market = judgeStkMarket(trade_tb)
+	if (market == `SZ){
+		fval = ActiveBstrdsclvolavg_sz(rcycle_dict, ruler_tb, trade_tb, entrust_tb, qtrade_num, qentrust_num, sig_num)
+	}else if (market == `SH){
+		fval = ActiveBstrdsclvolavg_sh(rcycle_dict, ruler_tb, trade_tb, entrust_tb, qtrade_num, qentrust_num, sig_num)
+	}
+	return fval
+}
+
+def pwj_ActiveBstrdsclvolavg(rcycle_dict, ruler_tb, trade_tb, entrust_tb, qtrade_num, qentrust_num, sig_num){
+	market = judgeStkMarket(trade_tb)
+	if (market == `SZ){
+		fval = pwj_OdClimbOddotRate_sz(rcycle_dict, ruler_tb, trade_tb, entrust_tb, qtrade_num, qentrust_num, sig_num)
+	}else if (market == `SH){
+		fval = ActiveBstrdsclvolavg_sh(rcycle_dict, ruler_tb, trade_tb, entrust_tb, qtrade_num, qentrust_num, sig_num)
+	}
+	return fval
+}
+
+// *************************************//
+
+
+// ***************** 因子计算引擎 ******************//
+ftitle = `DevDemo
+fname = `ActiveBstrdsclvolavg
+// 最终形成的多参数因子名为 [fname]_[code]_T[qtrade_num]E[qentrust_num]S[sig_num], 如 ActiveBstrdsclvolavg_600010_T1E200S50
+// 随后模型层给出所用的因子列表或因子权重dict的key 为  ['ActiveBstrdsclvolavg_600010_T1E200S50', 'ActiveBstrdsclvolavg_600010_T1E200S50', '']
+initStk2FutFvalSyncdict(ftitle)    // 初始化存放因子的共享dict
+factor_tb = initStk2FutFactortb(code, tdate, ruler_tb)   // 初始化因子table
+trade_dict = dict([code], [trade_tb])      //离线投研会一次取很多票的数据
+entrust_dict = dict([code], [entrust_tb])
+DevDemo_fval.keys()
+
+//单进程调用
+calcStk2FutTsfactor(DevDemo_fval, ActiveBstrdsclvolavg, `ActiveBstrdsclvolavg, rcycle_dict, ruler_tb, trade_dict, entrust_dict, code, 50, 100, 50)
+calcStk2FutTsfactor(DevDemo_fval, ActiveBstrdsclvolavg, `ActiveBstrdsclvolavg, rcycle_dict, ruler_tb, trade_dict, entrust_dict, code, 200, 50, 1)
+calcStk2FutTsfactor(DevDemo_fval, ActiveBstrdsclvolavg, `ActiveBstrdsclvolavg, rcycle_dict, ruler_tb, trade_dict, entrust_dict, code, 1, 1, 50)
+// dict里各个key组装到factor_tb
+formStk2FutFactortb(DevDemo_fval, factor_tb)
+
+//多进程调用
+func_list = (calcStk2FutTsfactor_fp{, rcycle_dict, ruler_tb, , , code, ActiveBstrdsclvolavg, fname, 50, 100, 50}, calcStk2FutTsfactor_fp{, rcycle_dict, ruler_tb, , , code, ActiveBstrdsclvolavg, fname, 200, 50, 1}, calcStk2FutTsfactor_fp{, rcycle_dict, ruler_tb, , , code, ActiveBstrdsclvolavg, fname, 1, 1, 50})
+calcStk2FutTsfactor_parallel(DevDemo_fval, trade_dict, entrust_dict, func_list)
+formStk2FutFactortb(DevDemo_fval, factor_tb)
+// *************************************//
+
+
+
+
+

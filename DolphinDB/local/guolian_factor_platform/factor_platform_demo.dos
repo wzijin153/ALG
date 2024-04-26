@@ -1,0 +1,86 @@
+
+startDate_in = 2024.01.08
+endDate_in = 2024.01.08
+/////////////////////////取数优化/////////////////////////
+def getFactorData(tb1, startDate_in,endDate_in){
+    // 取金额的中间表数据 - 转化为宽表
+    whereConditions=[expr(sqlCol(`tradetime, date), >=, startDate_in), expr(sqlCol(`tradetime, date), <=, endDate_in)]
+    res = sql(select=sqlCol("FactorValue"), from=tb1, where=whereConditions, groupBy=[sqlCol(`securityid), sqlCol(`tradetime), sqlCol(`FactorName)], groupFlag=2)
+    return res
+}
+def getPriceData(tb2, startDate_in, endDate_in){
+    // 取行情表数据
+    whereConditions=[expr(sqlCol(`tradetime, date), >=, startDate_in), expr(sqlCol(`tradetime, date), <=, endDate_in)]
+    res = sql(select=sqlCol("*"), from=tb2, where=whereConditions)
+    return res
+}
+
+/////////////////////////第二类：单表格数据来源，group by，多步运算///////////////////////////
+defg pct_chg_cal(pct_chg) {
+    return (pct_chg - avg(pct_chg)) \ stdp(pct_chg)
+};go
+def pdf_gs(X,y){
+    h = 0.025  
+    result = 0
+    for(i in 0:size(X)){
+        result = result + exp(-pow((y-X[i,0])\h,2)\2)\(sqrt(2*pi)*h*size(X))
+    } 
+    return result
+};go
+def nos_gs(X){
+    a = min(X)
+    b = max(X)
+    result = 0
+    for(i in 0:100){
+        result = result + pow(pdf_gs(X,a+(b-a)*i\100)-exp(-pow(a+(b-a)*i\100,2))\sqrt(2*pi),2)
+    }
+    return result
+};go
+
+def gl_alpha0198(tb, startDate_in,endDate_in, factorName) {
+    // tb为前置模板返回的元编程
+    pre_sql = sql(select=(sqlCol(`securityid), sqlCol(`tradetime), sqlColAlias(<pct_chg_cal(pct_chg)>, `pct_chg_normed)), from=tb, groupBy=[sqlCol(`securityid), sqlCol(`tradetime, date, `tradedate)], groupFlag=0)
+    res_sql = sql(select=(sqlColAlias(parseExpr("'" + factorName + "'"), `FactorName), sqlColAlias(<nos_gs(pct_chg_normed)>, `FactorValue)), from=pre_sql, groupBy=(sqlCol(`securityid), sqlCol(`tradetime, date, `tradedate)))
+    return res_sql.eval()
+}
+
+/////////////////////////第三类: 多表格数据来源，group by///////////////////////////
+// 两表join模板
+def multiTableJoin(tb1, tb2, startDate_in, endDate_in){
+    // 取取金额的中间表数据
+    whereConditions1=[expr(sqlCol(`tradetime, date), >=, startDate_in), expr(sqlCol(`tradetime, date), <=, endDate_in)]
+    res1_sql = sql(select=sqlCol("FactorValue"), from=tb1, where=whereConditions1, groupBy=[sqlCol(`securityid), sqlCol(`tradetime), sqlCol(`FactorName)], groupFlag=2)
+    // // 取行情表数据
+    whereConditions2=[expr(sqlCol(`tradetime, date), >=, startDate_in), expr(sqlCol(`tradetime, date), <=, endDate_in)]
+    res2_sql = sql(select=sqlCol("*"), from=tb2, where=whereConditions2)
+
+    tb_factor_pivot = res1_sql.eval()
+    tb_price = res2_sql.eval()
+    // 返回元编程
+    pre_sql = sql(select=(sqlCol(`securityid), sqlCol(`tradetime), sqlCol(`beyond_1_buy_amount), sqlCol(`beyond_1_buy_cnt), sqlCol(`beyond_1_sell_amount), sqlCol(`beyond_1_sell_cnt), sqlCol(`beyond_3_buy_amount), sqlCol(`beyond_3_buy_cnt), sqlCol(`beyond_3_sell_amount), sqlCol(`beyond_3_sell_cnt), sqlCol(`beyond_5_buy_amount), sqlCol(`beyond_5_buy_cnt), sqlCol(`beyond_5_sell_amount), sqlCol(`beyond_5_sell_cnt), sqlCol(`beyond_7_buy_amount), sqlCol(`beyond_7_buy_cnt), sqlCol(`beyond_7_sell_amount), sqlCol(`beyond_7_sell_cnt), sqlCol(`buy_amount), sqlCol(`buy_cnt), sqlCol(`sell_amount), sqlCol(`sell_cnt), sqlCol(`pct_chg), sqlCol(`amount), sqlCol(`orders)), from=<aj(tb_factor_pivot, tb_price, `securityid`tradetime)>, where=<touchLimit != 1>)
+    return pre_sql
+}
+
+def bo_big_bs_ret_corr(pre_sql, factorName){
+    res_sql = sql(select=(sqlColAlias(parseExpr("'" + factorName + "'"), `FactorName), sqlColAlias(<corr(beyond_1_buy_amount - beyond_1_sell_amount, pct_chg)>, `FactorValue)), from=pre_sql, groupBy=(sqlCol(`securityid), sqlCol(`tradetime, date, `tradedate)))
+    return res_sql.eval()
+}
+
+def bo_big_b_amt_pct_neg(pre_sql, factorName){
+    res_sql = sql(select=(sqlColAlias(parseExpr("'" + factorName + "'"), `FactorName), sqlColAlias(<sum(iif(pct_chg < 0, beyond_1_buy_amount, 0)) / sum(amount)>, `FactorValue)), from=pre_sql, groupBy=(sqlCol(`securityid), sqlCol(`tradetime, date, `tradedate)))
+    return res_sql.eval()
+}
+
+/////////////////////////第四类：多表格数据来源，context by，且依赖前面计算的因子值///////////////////////////
+def BIG_ORDER_SD0(pre_sql, factorName){
+    // 计算因子
+    res_sql = sql(select=(sqlColAlias(parseExpr("'" + factorName + "'"), `FactorName), sqlColAlias(<sum(abs(beyond_7_buy_amount) + abs(beyond_7_sell_amount)) / sum(amount)>, `FactorValue)), from=pre_sql, groupBy=(sqlCol(`securityid), sqlCol(`tradetime, date, `tradedate)))
+    return res_sql.eval()
+}
+
+def B_BIG_ORDER_SD0(pre_sql, factorName){
+    pre = sql(select=sqlColAlias(<sum(beyond_7_buy_amount) / sum(amount)>, `y), from=pre_sql, groupBy=(sqlCol(`securityid), sqlCol(`tradetime, date, `tradedate)))
+    f52 = sql(select=(sqlColAlias(<`BIG_ORDER_SD0>, `FactorName), sqlColAlias(<sum(abs(beyond_7_buy_amount) + abs(beyond_7_sell_amount)) / sum(amount)>, `FactorValue)), from=pre_sql, groupBy=(sqlCol(`securityid), sqlCol(`tradetime, date, `tradedate)))
+    res_sql = sql(select=(sqlColAlias(parseExpr("'" + factorName + "'"), `FactorName), sqlColAlias(<residual(y,FactorValue,ols(y, FactorValue))>, `FactorValue)), from=<aj(pre.eval(), f52.eval(), `securityid`tradedate)>, groupBy=sqlCol(`tradedate), groupFlag=0)
+    return res_sql.eval()
+}

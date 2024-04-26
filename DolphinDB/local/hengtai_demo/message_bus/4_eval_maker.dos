@@ -1,0 +1,337 @@
+//module eval_maker
+
+def concatFactorStk2Index(factor_tb, iwg_dict){
+	fconcat_tb = select Symbol, TradeDate, TradeTime from factor_tb
+	code_pool = iwg_dict.keys()
+	for (fcol in factor_tb.columnNames()[3:]){
+		fsplit = split(fcol, '_')
+		code = fsplit[1]
+		fname = fsplit[0] + '_' + fsplit[2]
+		if (not fname in fconcat_tb.columnNames())
+			fconcat_tb[fname] = 0.0
+		fconcat_tb[fname] = fconcat_tb[fname] + iwg_dict[code] * factor_tb[fcol]
+	}
+	return fconcat_tb
+}
+
+def calcFevalPureCorr(concat_tb, fcols, ycols, is_calc_stdcorr){
+	for (fname in fcols){
+		corr_tb = select Symbol, TradeDate from concat_tb
+		update corr_tb set Factor = fname
+		update corr_tb set X = concat_tb[fname]
+		for (yname in ycols){
+			update corr_tb set Y = concat_tb[yname]
+			sqlUpdate(table=corr_tb, updates=sqlColAlias(<corr(corr_tb.X, corr_tb.Y)>, yname + '_purecorr'), contextby=<Symbol>).eval()
+			if (is_calc_stdcorr == 1){
+				if (not yname + '_std' in concat_tb.columnNames()){
+					update concat_tb set Y = concat_tb[yname]
+					sqlUpdate(table=concat_tb, updates=sqlColAlias(<std(concat_tb.Y)>, yname + '_std'), contextby=<Symbol>).eval()
+				}
+				update corr_tb set corr_std = corr_tb[yname + '_purecorr'] * concat_tb[yname + '_std']
+				corr_tb.rename!(`corr_std, yname + '_stdcorr')
+			}
+			
+		}
+		dropColumns!(corr_tb, `X `Y)
+		corr_tb = select * from corr_tb context by Symbol  limit 1
+		if (fname == fcols[0]){
+			factor_corr_tb = corr_tb
+		}else{
+			factor_corr_tb.append!(corr_tb)
+		}
+		
+	}
+	return factor_corr_tb
+}
+
+
+def calcFevalWgCorr(concat_tb, fcols, ycols){
+	for (fname in fcols){
+		corr_tb = select Symbol, TradeDate from concat_tb
+		update corr_tb set Factor = fname
+		update corr_tb set X = concat_tb[fname]
+		for (yname in ycols){
+			update corr_tb set Y = concat_tb[yname]
+			sqlUpdate(table=corr_tb, updates=sqlColAlias(<math_wght_corr(corr_tb.X, corr_tb.Y, corr_tb.Y.abs())>, yname + '_wgcorr'), contextby=<Symbol>).eval()
+		}
+		dropColumns!(corr_tb, `X `Y)
+		corr_tb = select * from corr_tb context by Symbol  limit 1
+		if (fname == fcols[0]){
+			factor_corr_tb = corr_tb
+		}else{
+			factor_corr_tb.append!(corr_tb)
+		}
+		
+	}
+	return factor_corr_tb
+}
+
+
+def calcFevalStdCorr(concat_tb, fcols, ycols){
+	for (fname in fcols){
+		corr_tb = select Symbol, TradeDate from concat_tb
+		update corr_tb set Factor = fname
+		update corr_tb set X = concat_tb[fname]
+		for (yname in ycols){
+			update corr_tb set Y = concat_tb[yname]
+			update corr_tb set fcorr = corr(corr_tb.X, corr_tb.Y) context by Symbol
+			update corr_tb set ystd = std(corr_tb.Y) context by Symbol
+			sqlUpdate(table=corr_tb, updates=sqlColAlias(<fcorr * ystd * 100>, yname + '_stdcorr'), contextby=<Symbol>).eval()
+		}
+		dropColumns!(corr_tb, `X `Y `fcorr `ystd)
+		corr_tb = select * from corr_tb context by Symbol  limit 1
+		if (fname == fcols[0]){
+			factor_corr_tb = corr_tb
+		}else{
+			factor_corr_tb.append!(corr_tb)
+		}
+	}
+	return factor_corr_tb
+}
+
+
+def calcFevalAutoCorr(concat_tb, fcols){
+	lag_wg = 1\(2**(1..10))
+	lag_wg = lag_wg \ sum(lag_wg)
+	for (fname in fcols){
+		corr_tb = select Symbol, TradeDate from concat_tb
+		update corr_tb set Factor = fname
+		update corr_tb set autocorr = 0.0
+		update corr_tb set X = concat_tb[fname]
+		for (i in 1..10){
+			if (i == 1){
+				update corr_tb set autocorr = autocorr(corr_tb.X, i) * lag_wg[i - 1] context by Symbol}
+			else{
+				update corr_tb set autocorr = autocorr + autocorr(corr_tb.X, i) * lag_wg[i - 1] context by Symbol}
+		}
+		dropColumns!(corr_tb, `X)
+		corr_tb = select * from corr_tb context by Symbol  limit 1
+		if (fname == fcols[0]){
+			factor_corr_tb = corr_tb
+		}else{
+			factor_corr_tb.append!(corr_tb)
+		}
+	}
+	return factor_corr_tb
+}
+
+
+def calcFevalCorrs(factor_tb, yret_tb, corr_tasks, stt_time, end_time){
+	fcols = factor_tb.columnNames()[3:]
+	ycols = yret_tb.columnNames()[3:]
+	concat_tb = lj(factor_tb, yret_tb, `Symbol `TradeDate `TradeTime)
+	ffill!(concat_tb)
+	bfill!(concat_tb)
+	nullFill!(concat_tb, 0.0)
+	if (stt_time != 0){
+		concat_tb = select * from concat_tb where TradeTime >= stt_time
+	}
+	if (end_time != 0){
+		concat_tb = select * from concat_tb where TradeTime <= end_time
+	}
+
+	for (task in corr_tasks){
+		if (task == 'purecorr'){
+			if ('stdcorr' in corr_tasks){
+				task_corr_tb = calcFevalPureCorr(concat_tb, fcols, ycols, 1)}
+			else{
+				task_corr_tb = calcFevalPureCorr(concat_tb, fcols, ycols, 0)}
+		}
+		else if (task == 'wgcorr'){
+			task_corr_tb = calcFevalWgCorr(concat_tb, fcols, ycols)
+		}
+//		else if (task == 'stdcorr'){
+//			task_corr_tb = calcFevalStdCorr(concat_tb, fcols, ycols)
+//		}
+		else if (task == 'autocorr'){
+			task_corr_tb = calcFevalAutoCorr(concat_tb, fcols)
+		}else{
+			continue}
+
+		if (task == corr_tasks[0]){
+			tasks_corr_tb = task_corr_tb
+		}else{
+			tasks_corr_tb = lj(tasks_corr_tb, task_corr_tb, `Symbol `TradeDate `Factor)
+		}
+	}
+	tasks_corr_tb.nullFill!(0.0)
+	return tasks_corr_tb}
+
+
+
+def calcFevalPureCorr_atom(concat_tb, fname, yname){
+	corr_tb = select Symbol, TradeDate from concat_tb
+	corr_nm = fname + '_' + yname + '_purecorr'
+	try{
+		update corr_tb set X = concat_tb[fname]
+		update corr_tb set Y = concat_tb[yname]
+		sqlUpdate(table=corr_tb, updates=sqlColAlias(<corr(corr_tb.X, corr_tb.Y)>, corr_nm), contextby=<Symbol>).eval()
+	}catch(ex){
+		sqlUpdate(table=corr_tb, updates=sqlColAlias(<0.0>, corr_nm)).eval()
+	}
+	corr_tb = select * from corr_tb context by Symbol  limit 1
+	return corr_tb[corr_nm]
+}
+
+
+def calcFevalWgCorr_atom(concat_tb, fname, yname){
+	corr_tb = select Symbol, TradeDate from concat_tb
+	corr_nm = fname + '_' + yname + '_wgcorr'
+	try{
+		update corr_tb set X = concat_tb[fname]
+		update corr_tb set Y = concat_tb[yname]
+		sqlUpdate(table=corr_tb, updates=sqlColAlias(<math_wght_corr(corr_tb.X, corr_tb.Y, corr_tb.Y.abs())>, corr_nm), contextby=<Symbol>).eval()
+	}catch(ex){
+		sqlUpdate(table=corr_tb, updates=sqlColAlias(<0.0>, corr_nm)).eval()
+	}
+	corr_tb = select * from corr_tb context by Symbol  limit 1
+	return corr_tb[corr_nm]
+}
+
+
+def calcFevalStdCorr_atom(concat_tb, fname, yname){
+	corr_tb = select Symbol, TradeDate from concat_tb
+	corr_nm = fname + '_' + yname + '_stdcorr'
+	try{
+		update corr_tb set X = concat_tb[fname]
+		update corr_tb set Y = concat_tb[yname]
+		update corr_tb set fcorr = corr(corr_tb.X, corr_tb.Y) context by Symbol
+		update corr_tb set ystd = std(corr_tb.Y) context by Symbol
+		sqlUpdate(table=corr_tb, updates=sqlColAlias(<fcorr * ystd * 100>, corr_nm)).eval()
+	}catch(ex){
+		sqlUpdate(table=corr_tb, updates=sqlColAlias(<0.0>, corr_nm)).eval()
+	}
+	corr_tb = select * from corr_tb context by Symbol  limit 1
+	return corr_tb[corr_nm]
+}
+
+
+def calcFevalAutoCorr_atom(concat_tb, fname, lag_wg){
+	corr_tb = select Symbol, TradeDate from concat_tb
+	try{
+		update corr_tb set X = concat_tb[fname]
+		for (i in 1..size(lag_wg)){
+			if (i == 1){
+				update corr_tb set autocorr = autocorr(corr_tb.X, i) * lag_wg[i - 1] context by Symbol}
+			else{
+				update corr_tb set autocorr = autocorr + autocorr(corr_tb.X, i) * lag_wg[i - 1] context by Symbol}
+		}
+	}catch(ex){
+		update corr_tb set autocorr = 0.0
+	}
+	corr_tb = select * from corr_tb context by Symbol  limit 1
+	return corr_tb.autocorr
+}
+
+
+def calcFevalCorrs_atom(concat_tb, fname, yname, lag_wg, ctask){
+	if (ctask == `purecorr){
+		cval = calcFevalPureCorr_atom(concat_tb, fname, yname)}
+	else if  (ctask == `wgcorr){
+		cval = calcFevalWgCorr_atom(concat_tb, fname, yname)}
+	else if  (ctask == `stdcorr){
+		cval = calcFevalStdCorr_atom(concat_tb, fname, yname)}
+	else if (ctask == `autocorr){
+		cval = calcFevalAutoCorr_atom(concat_tb, fname, lag_wg)}
+	else{
+		corr_tb = select * from concat_tb context by Symbol limit 1
+		update corr_tb set temp = 0.0
+		cval = corr_tb.temp
+	}
+	return cval
+}
+
+
+def calcFevalCorrs_parallel(factor_tb, yret_tb, stt_time, end_time, cname_list, func_tp){
+	fname_list = factor_tb.columnNames()[3:]
+	concat_tb = lj(factor_tb, yret_tb, `Symbol `TradeDate `TradeTime)
+	ffill!(concat_tb)
+	bfill!(concat_tb)
+	nullFill!(concat_tb, 0.0)
+	if (stt_time != 0){
+		concat_tb = select * from concat_tb where TradeTime >= stt_time
+	}
+	if (end_time != 0){
+		concat_tb = select * from concat_tb where TradeTime <= end_time
+	}
+
+	cval_tp = ploop(call{, concat_tb}, func_tp)
+	ctable_list = []
+	nn = size(fname_list)
+	mm = size(cname_list)
+	for (i in 0..(nn - 1)){
+		fname = fname_list[i]
+		corr_tb = select Symbol, TradeDate from concat_tb context by Symbol limit 1
+		sqlUpdate(table=corr_tb, updates=sqlColAlias(<fname>, `Factor)).eval()
+		for (j in 0..(mm - 1)){
+			cname = cname_list[j]
+			sqlUpdate(table=corr_tb, updates=sqlColAlias(<cval_tp[i*mm + j]>, cname)).eval()
+		}
+		corr_tb.nullFill!(0.0)
+		ctable_list.append!(corr_tb)
+	}
+	re = unionAll(ctable_list, true)
+	corrs_tb = select * from re
+	return corrs_tb
+}
+
+
+def calcFselfCorrs(factor_tb, fname_list, trd_date){
+	code_pool = exec distinct(Symbol) from factor_tb
+	flag_stt = 0
+	for (code in code_pool){
+		code_ftb = sql(select=sqlCol(fname_list), where=[<Symbol == code>], from=factor_tb).eval()
+		code_ftb = code_ftb.ffill().nullFill(0)
+		code_selfcorr = corrMatrix(matrix(code_ftb))
+		code_selfcorr.nullFill!(1)
+		if (flag_stt == 0){
+			total_selfcorr = code_selfcorr
+			flag_stt = 1
+		}else{
+			total_selfcorr = total_selfcorr + code_selfcorr
+		}
+	}
+	total_selfcorr = total_selfcorr \ size(code_pool)
+	if (trd_date == 0){
+		total_selfcorr_tb = total_selfcorr
+	}else{
+		trd_date_list = array(DATE, size(fname_list), size(fname_list), trd_date)
+		total_selfcorr_tb = table(trd_date_list, fname_list, total_selfcorr)
+		total_selfcorr_tb.rename!([`TradeDate,`Factor] <-fname_list)
+	}
+	return total_selfcorr_tb
+}
+
+
+def calcFselfCorrs_atom(each_tb){
+	code_pool = exec distinct(Symbol) from each_tb
+	flag_stt = 0
+	for (code in code_pool){
+		code_ftb = select * from each_tb where Symbol == code
+		code_ftb = code_ftb.ffill().nullFill(0)
+		code_selfcorr = corrMatrix(matrix(code_ftb[:, 3:]))
+		code_selfcorr.nullFill!(1)
+		if (flag_stt == 0){
+			total_selfcorr = code_selfcorr
+			flag_stt = 1
+		}else{
+			total_selfcorr = total_selfcorr + code_selfcorr }
+	}
+	return total_selfcorr
+}
+
+
+def calcFselfCorrs_parallel(factor_tb, fname_list, trd_date){
+	ds = repartitionDS(<select * from factor_tb>, `Symbol, VALUE)
+	total_selfcorr = mr(ds, calcFselfCorrs_atom, +)
+	code_num = size(exec distinct(Symbol) from factor_tb)
+	total_selfcorr = total_selfcorr \ code_num
+	if (trd_date == 0){
+		total_selfcorr_tb = total_selfcorr
+	}else{
+		trd_date_list = array(DATE, size(fname_list), size(fname_list), trd_date)
+		total_selfcorr_tb = table(trd_date_list, fname_list, total_selfcorr)
+		total_selfcorr_tb.rename!([`TradeDate,`Factor] <-fname_list)
+	}
+	return total_selfcorr_tb
+}

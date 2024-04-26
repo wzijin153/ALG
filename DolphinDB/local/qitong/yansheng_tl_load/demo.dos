@@ -1,0 +1,23 @@
+
+clearCachedModules()
+module DolphinDBModules::easyTLDataImport::loadTLDatasnapshotVector
+
+use DolphinDBModules::easyTLDataImport::loadTLDatasnapshotVector
+use DolphinDBModules::easyTLDataImport::createDB
+use DolphinDBModules::easyTLDataImport::createTBsnapshotVector
+use DolphinDBModules::easyTLDataImport::loadOneDayData::loadOneDaySnapshotVector
+
+fileDir = ""// 存放通联数据的路径
+
+// 沪深单独导入
+marketArray = ["SH", "SZ"]
+for (i in marketArray) {
+    // 导入快照数据
+    jobid1 = autoLoadTongLianData(fileDir=fileDir, dataSource="TLSnapshot", dbName="dfs://TL_level2_snapshotVector", market=i, startDate="20230228", endDate="20230228", parallel=3)
+}
+
+// 沪深合并导入
+jobid = autoLoadTongLianData(fileDir=fileDir, dataSource="TLSnapshot", dbName="dfs://TL_level2_snapshotVector", market=ALL, startDate="20230228", endDate="20230228", parallel=3)
+
+
+

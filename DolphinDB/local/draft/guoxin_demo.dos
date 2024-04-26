@@ -1,0 +1,135 @@
+
+// 要求: 如果有很多job写入，先串行写入到流表，积累到一定数量，然后再定期写到库里面
+if(existsDatabase("dfs://origin")){
+  dropDatabase("dfs://origin")
+}
+// 创建原始库表
+dbDate = database("", VALUE, 2020.01.01..2020.01.02)
+dbSym= database("", HASH, [SYMBOL, 2])
+db = database("dfs://Origin", COMPO, [dbDate, dbSym])
+colNames = `date`time`sym`qty`price
+colTypes = [DATE, TIME, SYMBOL, INT, DOUBLE]
+originTrade = db.createPartitionedTable(table=table(1 : 0, colNames, colTypes), tableName="originTrade", partitionColumns=`date`sym)
+originTrade = loadTable("dfs://Origin", "originTrade")
+// 模拟数据写入
+t = table(1 : 0, `date`time`sym`qty`price, [DATE, TIME, SYMBOL, INT, DOUBLE])
+n = 10
+ticks = 1000
+rows = ticks
+startMinute = 09:30:00.000
+go
+for (x in 0 : n) {
+  time = startMinute + x * 60000 + rand(60000, rows)
+  indices = isort(time)
+  time = time[indices]
+  date = array(DATE, 0, rows).append!(take(2020.01.01..2020.01.02, rows))
+  sym = array(SYMBOL, 0, rows).append!(take(`IBM, ticks)).append!(take(`MSFT, ticks)).append!(take(`GOOG, ticks))[indices]
+  price = array(DOUBLE, 0, rows).append!(norm(15, 1, ticks)).append!(norm(43,1, ticks)).append!(norm(74,20, ticks))[indices]
+  qty = array(INT, 0, rows).append!(take(rand(100, ticks), ticks)).append!(take(rand(200, ticks), ticks)).append!(take(rand(300, ticks), ticks))[indices]
+  insert into t values(date, time, sym, qty, price)
+}
+originTrade.append!(t)
+select count(*) from originTrade
+// 创建计算库表
+if(existsDatabase("dfs://Trade")){
+  dropDatabase("dfs://Trade")
+}
+dbDate = database("", VALUE, 2020.01.01..2020.01.02)
+dbSym= database("", HASH, [SYMBOL, 2])
+db = database("dfs://Trade", COMPO, [dbDate, dbSym])
+colNames = `date`time`sym`qty`price`volume
+colTypes = [DATE, TIME, SYMBOL, INT, DOUBLE, DOUBLE]
+trades = db.createPartitionedTable(table=table(1 : 0, colNames, colTypes), tableName="trades", partitionColumns=`date`sym)
+trades = loadTable("dfs://Trade", "trades")
+// 
+unsubscribeTable(tableName="volume_stream", actionName="volume")
+undef("volume_stream", SHARED)
+volume = streamTable(100000 : 0, colNames, colTypes).share("volume_stream")
+// 
+subscribeTable(tableName="volume_stream", actionName="volume", handler=trades.append!(volume_stream), msgAsTable=true, batchSize=100000, throttle=60, reconnect=true, timeTrigger=true)
+// 定义mr
+def calVolume(t, mutable streamTable) {
+  res = select *, price * qty as volume from t
+  streamTable.append!(res)
+}
+ds = sqlDS(<select * from loadTable("dfs://Origin", "originTrade") where date = 2020.01.02>)
+mr(ds, calVolume{, volume_stream})
+// 查看执行结果
+select count(*) from trades
+select count(*) from volume_stream
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 要求: 如果有很多job写入，先串行写入到流表，积累到一定数量，然后再定期写到库里面
+if(existsDatabase("dfs://origin")){
+  dropDatabase("dfs://origin")
+}
+// 创建原始库表
+dbDate = database("", VALUE, 2020.01.01..2020.01.02)
+dbSym= database("", HASH, [SYMBOL, 2])
+db = database("dfs://Origin", COMPO, [dbDate, dbSym])
+colNames = `date`time`sym`qty`price
+colTypes = [DATE, TIME, SYMBOL, INT, DOUBLE]
+originTrade = db.createPartitionedTable(table=table(1 : 0, colNames, colTypes), tableName="originTrade", partitionColumns=`date`sym)
+originTrade = loadTable("dfs://Origin", "originTrade")
+// 模拟数据写入
+undef("t")
+n = 10
+rows = 1000
+startMinute = 09:30:00.000
+t = table(1 : 0, `date`time`sym`qty`price, [DATE, TIME, SYMBOL, INT, DOUBLE])
+for (x in 0 : n) {
+  time = startMinute + x * 60000 + rand(60000, rows)
+  indices = isort(time)
+  time = time[indices]
+  date = array(DATE, 0, rows).append!(take(2020.01.01..2020.01.02, rows))
+  sym = array(SYMBOL, 0, rows).append!(take(`IBM, rows)).append!(take(`MSFT, rows)).append!(take(`GOOG, rows))[indices]
+  price = array(DOUBLE, 0, rows).append!(norm(15, 1, rows)).append!(norm(43,1, rows)).append!(norm(74,20, rows))[indices]
+  qty = array(INT, 0, rows).append!(take(rand(100, rows), rows)).append!(take(rand(200, rows), rows)).append!(take(rand(300, rows), rows))[indices]
+  insert into t values(date, time, sym, qty, price)
+}
+originTrade.append!(t)
+// 创建计算库表
+if(existsDatabase("dfs://Trade")){
+  dropDatabase("dfs://Trade")
+}
+dbDate = database("", VALUE, 2020.01.01..2020.01.02)
+dbSym= database("", HASH, [SYMBOL, 2])
+db = database("dfs://Trade", COMPO, [dbDate, dbSym])
+colNames = `date`time`sym`qty`price`volume
+colTypes = [DATE, TIME, SYMBOL, INT, DOUBLE, DOUBLE]
+trades = db.createPartitionedTable(table=table(1 : 0, colNames, colTypes), tableName="trades", partitionColumns=`date`sym)
+// 创建trades表的订阅流表
+trades = loadTable("dfs://Trade", "trades")
+volume = streamTable(100000 : 0, colNames, colTypes).share("volume_stream")
+subscribeTable(tableName="volume_stream", actionName="volume", handler=trades.append!(volume_stream), msgAsTable=true, batchSize=100000, throttle=60, reconnect=true, timeTrigger=true)
+// 定义mr
+def calVolume(t, mutable streamTable) {
+  res = select *, price * qty as volume from t
+  streamTable.append!(res)
+}
+ds = sqlDS(<select * from loadTable("dfs://Origin", "originTrade") where date = 2020.01.02>)
+mr(ds, calVolume{, volume_stream})
+// 查看执行结果
+select count(*) from trades
+select count(*) from volume_stream
+

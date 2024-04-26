@@ -1,0 +1,78 @@
+
+
+// 清理环境
+def clearEnv(){
+    truncate("dfs://TL_Level2", "oneMinKLine")
+    truncate("dfs://TL_Level2", "taCal")
+	try{unsubscribeTable(tableName="inputStream", actionName="ohlc")}catch(ex){}
+	try{unsubscribeTable(tableName=`outputStream1, actionName="taCal")}catch(ex){}
+	try{unsubscribeTable(tableName=`outputStream, actionName="saveTaCalToDFS")}catch(ex){}
+    try{unsubscribeTable(tableName=`outputStream1, actionName="saveKLineToDFS")}catch(ex){}
+	try{dropStreamEngine("ohlc")} catch(ex){ print(ex) }
+	try{dropStreamEngine("taCal")} catch(ex){ print(ex) }
+	try{undef(`inputStream, SHARED)}catch(ex){}
+	try{undef(`outputStream1, SHARED)}catch(ex){}
+	try{undef(`outputStream, SHARED)}catch(ex){}
+}
+clearEnv()
+
+// 创建逐笔成交流表
+inputStream_colNames = ["ChannelNo", "ApplSeqNum", "MDStreamID", "BidApplSeqNum", "OfferApplSeqNum", "SecurityID", "SecurityIDSource", "TradePrice", "TradeQty", "ExecType", "TradeTime", "LocalTime", "SeqNo", "DataStatus", "TradeMoney", "TradeBSFlag", "BizIndex", "OrderKind", "Market"]
+inputStream_colTypes = [INT, LONG, SYMBOL, LONG, LONG, SYMBOL, SYMBOL, DOUBLE, INT, SYMBOL, TIMESTAMP, TIME, LONG, INT, DOUBLE, SYMBOL, LONG, SYMBOL, SYMBOL]
+share(streamTable(1 : 0, inputStream_colNames, inputStream_colTypes), "inputStream")
+
+// 创建聚合结果流表
+outputStream1_colNames = ["TradeTime", "SecurityID", "Market", "ComputeTime", "Open", "High", "Low", "Close", "Volume"]
+outputStream1_colTypes = [TIMESTAMP, SYMBOL, SYMBOL, LONG, DOUBLE, DOUBLE, DOUBLE, DOUBLE, LONG]
+share(streamTable(1 : 0, outputStream1_colNames, outputStream1_colTypes), "outputStream1")
+
+// 创建因子计算结果流表
+outputStream_colNames = ["SecurityID", "Market", "TradeTime", "Dema", "Ema", "MidPrice", "Tema"]
+outputStream_colTypes = [SYMBOL, SYMBOL, TIMESTAMP, DOUBLE, DOUBLE, DOUBLE, DOUBLE]
+share(streamTable(1 : 0, outputStream_colNames, outputStream_colTypes), "outputStream")
+
+// 创建时序聚合引擎，输出到 outputStream1
+createDailyTimeSeriesEngine(name="ohlc", windowSize=60000, step=60000, metrics=<[first(TradePrice), max(TradePrice), min(TradePrice), last(TradePrice), sum(TradeQty)]>, dummyTable=objByName("inputStream"), outputTable=objByName("outputStream1"), timeColumn="TradeTime", useSystemTime=false, keyColumn=["SecurityID", "Market"], garbageSize=50, useWindowStartTime=true, sessionBegin=09:30:00.000 13:00:00.000, sessionEnd=11:30:00.000 15:00:00.000, forceTriggerTime=7, outputElapsedMicroseconds=true)
+subscribeTable(tableName="inputStream", actionName="ohlc", handler=getStreamEngine("ohlc"), msgAsTable=true, hash=0, reconnect=true)
+
+// 创建响应式状态引擎，输出到 outputStream
+use ta
+reactiveStateMetrics=<[
+    TradeTime,
+    ta::dema(Close), 
+    ta::ema(Close), 
+    ta::midPrice(High, Low), 
+    ta::tema(Close)
+]>
+createReactiveStateEngine(name="taCal", metrics=reactiveStateMetrics, dummyTable=objByName("outputStream1"), outputTable=objByName("outputStream"), keyColumn=["SecurityID", "Market"], keepOrder=true)
+subscribeTable(tableName=`outputStream1, actionName="taCal", handler=getStreamEngine("taCal"), msgAsTable=true, hash=1, reconnect=true)
+
+// 入库
+subscribeTable(tableName="outputStream1", actionName="saveKLineToDFS", handler=loadTable("dfs://TL_Level2", "oneMinKLine"), msgAsTable=true, batchSize=10000, throttle=1, reconnect=true)
+subscribeTable(tableName="outputStream", actionName="saveTaCalToDFS", handler=loadTable("dfs://TL_Level2", "taCal"), msgAsTable=true, batchSize=10000, throttle=1, reconnect=true)
+
+// 回放
+tradeDS = replayDS(sqlObj=<select * from loadTable("dfs://TL_Level2", "trade") where ExecType != "C" >, dateColumn="TradeTime", timeColumn="TradeTime")
+replay(inputTables=tradeDS, outputTables=inputStream, dateColumn="TradeTime", timeColumn="TradeTime", replayRate=10000)
+
+
+trade = loadTable("dfs://TL_Level2", "trade")
+schema(trade).colDefs.typeString.concat(", ")
+
+
+test = select * from trade limit 10000
+inputStream.append!(test)
+
+select * from outputStream1 where SecurityID = "600031"
+
+
+// 建表语句
+dbHandle=database("dfs://TL_Level2")
+a = select * from outputStream1
+k_table = createPartitionedTable(dbHandle, table=a, tableName="oneMinKLine", partitionColumns=["TradeTime", "SecurityID"], sortColumns=["Market", "SecurityID", "TradeTime"])
+
+a = select * from outputStream
+k_table = createPartitionedTable(dbHandle, table=a, tableName="taCal", partitionColumns=["TradeTime", "SecurityID"], sortColumns=["Market", "SecurityID", "TradeTime"])
+
+
+

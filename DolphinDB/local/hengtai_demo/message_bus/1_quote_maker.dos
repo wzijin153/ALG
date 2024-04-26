@@ -1,0 +1,71 @@
+def getRcycleRuler(scope_stt, scope_end, rcycle_str){
+	ssn_stt = [scope_stt, 13:00:00.000]
+	ssn_end = [11:30:00.000, scope_end]
+	ruler_tb = select count(*) from table( scope_stt..scope_end as k_time ) group by dailyAlignedBar(k_time, ssn_stt, duration(rcycle_str), ssn_end) as k_time
+	ruler_tb = select k_time from ruler_tb where (k_time >= scope_stt and k_time < 11:30:00.000) or (k_time >= 13:00:00.000 and k_time < scope_end) and (not isNull(k_time))
+	return ruler_tb
+}
+
+def getRcycleDict(scope_stt, scope_end, rcycle_str){
+	rcycle_dict = dict([`scope_stt, `scope_end, `rcycle_str], [scope_stt, scope_end, rcycle_str])
+	return rcycle_dict
+}
+
+def getStkfutDaysnap(dbtb, code, tdate){
+	return select * from dbtb where Symbol == code and Trade_Date == tdate
+}
+
+def reshpStkfutDaysnap(mutable quote_tb, ruler_tb){
+	update quote_tb set is_origin = 1
+	quote_tb = fj(quote_tb, ruler_tb, `m_time, `k_time)
+	update quote_tb set k_time = k_time.nullFill(m_time)
+	for (col in quote_tb.columnNames()){
+		if (col == `m_time){
+			dropColumns!(quote_tb, col)
+		}else if (col.endsWith(`k_time)){
+			quote_tb.rename!(col, `m_time)
+		}else if (col == `is_origin){
+			quote_tb[col] = nullFill(quote_tb[col], 0)
+		}else{
+			// quote_tb[col] = quote_tb[col].ffill()
+			quote_tb[`BidPrice1] = ffill( quote_tb.BidPrice[0] )
+			quote_tb[`BidVolume1] = ffill( quote_tb.BidVolume[0] )
+			quote_tb[`AskPrice1] = ffill( quote_tb.AskPrice[0] )
+			quote_tb[`AskVolume1] = ffill( quote_tb.AskVolume[0] )
+		}
+	}
+	reorderColumns!(quote_tb, `ActionDate `Trade_Date `m_time)
+	return 1
+}
+
+
+def loadPubnodeEntrustDict(handler, sql_entrust, code_pool, tdate, sz_decay_ms, sh_decay_ms){
+	dict_val = []
+	for (code in code_pool){
+		tmp_sql = sql_entrust + "Code == `" + code + " and date(TradeTime) == " + tdate
+		entrust_tb = handler(tmp_sql)
+		update entrust_tb set TradeTime_t = time(TradeTime)
+		remendTcol(entrust_tb, `TradeTime)
+		update entrust_tb set TradeTime = TradeTime + sz_decay_ms where Market == `SZ
+		update entrust_tb set TradeTime = TradeTime + sh_decay_ms where Market == `SH
+		dict_val.append!(entrust_tb)
+	}
+	entrust_dict = dict(code_pool, dict_val)
+	return entrust_dict
+}
+
+
+def loadPubnodeTradeDict(handler, sql_trade, code_pool, tdate, sz_decay_ms, sh_decay_ms){
+	dict_val = []
+	for (code in code_pool){
+		tmp_sql = sql_trade + "Code == `" + code + " and date(TradeTime) == " + tdate
+		trade_tb = handler(tmp_sql)
+		update trade_tb set TradeTime_t = time(TradeTime)
+		remendTcol(trade_tb, `TradeTime)
+		update trade_tb set TradeTime = TradeTime + sz_decay_ms where Market == `SZ
+		update trade_tb set TradeTime = TradeTime + sh_decay_ms where Market == `SH
+		dict_val.append!(trade_tb)
+	}
+	trade_dict = dict(code_pool, dict_val)
+	return trade_dict
+}

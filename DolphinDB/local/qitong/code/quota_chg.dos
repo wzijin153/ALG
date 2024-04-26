@@ -1,0 +1,728 @@
+//数据预处理
+def prepareOBData_last(calDate, symbol, OBData, t){
+	/*该函数用于将OB数据聚合按 t 秒聚合, 并对空值进行填补
+	 * symbol 股票代码  "000001"
+	 * calDate 为数据日期 2022.06.08
+	 * OBData为OB数据  loadTable('dfs://TSDB_OB','SZ')
+	 * t 数据聚合时间段  1s
+	 */
+	tmp = select ticker, data_time, last(ask10) as ask10, last(ask9) as ask9, last(ask8) as ask8, last(ask7) as ask7, last(ask6) as ask6, last(ask5) as ask5, last(ask4) as ask4, last(ask3) as ask3, last(ask2) as ask2, last(ask1) as ask1, last(bid10) as bid10, last(bid9) as bid9, last(bid8) as bid8, last(bid7) as bid7, last(bid6) as bid6, last(bid5) as bid5, last(bid4) as bid4, last(bid3) as bid3, last(bid2) as bid2, last(bid1) as bid1, last(askqty10) as askqty10, last(askqty9) as askqty9, last(askqty8) as askqty8, last(askqty7) as askqty7, last(askqty6) as askqty6, last(askqty5) as askqty5, last(askqty4) as askqty4, last(askqty3) as askqty3, last(askqty2) as askqty2, last(askqty1) as askqty1, last(bidqty10) as bidqty10, last(bidqty9) as bidqty9, last(bidqty8) as bidqty8, last(bidqty7) as bidqty7, last(bidqty6) as bidqty6, last(bidqty5) as bidqty5, last(bidqty4) as bidqty4, last(bidqty3) as bidqty3, last(bidqty2) as bidqty2, last(bidqty1) as bidqty1 from OBData where date(data_time) = calDate[0] and ticker in symbol group by ticker, interval(data_time, t, 'none') as data_time	
+	if(tmp.size() == 0){
+		return tmp
+	}
+	ticker = symbol
+	// 对齐时间窗口, 除完以后就是半天交易时段数据的条数
+	n = 7200000 / t
+	// 构造完整连续的时间序列
+	timeSeries = 09:30:00.000 + 0..(n - 1) * t
+	timeSeries.append!(13:00:00.000 + 0..(n - 1) * t)
+	// 格式化为 timestamp 类型(原表类型为 timestamp)
+	timeSeries = timestamp(take(string(calDate[0]) + 'T', n * 2) + string(timeSeries))
+	// 构造前两列 ticker, data_time
+	demo = table(take(take(ticker, timeSeries.size()), symbol.size() * timeSeries.size()).sort() as ticker, take(timeSeries, symbol.size() * timeSeries.size()) as data_time)
+	res = lj(demo, tmp, `ticker`data_time)
+	res = select ask10, ask9, ask8, ask7, ask6, ask5, ask4, ask3, ask2, ask1, bid10, bid9, bid8, bid7,bid6, bid5, bid4, bid3, bid2, bid1, askqty10, askqty9, askqty8, askqty7,askqty6, askqty5, askqty4,askqty3,askqty2, askqty1, bidqty10, bidqty9, bidqty8, bidqty7, bidqty6, bidqty5, bidqty4, bidqty3, bidqty2, bidqty1 from res group by ticker, interval(data_time, t, 'prev') as data_time
+	res = select * from res where (time(data_time) < 11:30:00.000) or (time(data_time) >=13:00:00.000)
+	return res
+}
+
+// 计算按成交量加权计算买卖五档加权中间价, 高开低收
+def prepareOBData_wavg(caldate, symbol, OBData, t, level){// caldate = i
+	// 将 bid, bidqty, ask, askqty 分别拼接为一个数组向量
+	tmp = select ticker, data_time, fixedLengthArrayVector(bid1, bid2, bid3, bid4, bid5, bid6, bid7, bid8, bid9, bid10) as bid, fixedLengthArrayVector(bidqty1, bidqty2, bidqty3, bidqty4, bidqty5, bidqty6, bidqty7, bidqty8, bidqty9, bidqty10) as bidqty, fixedLengthArrayVector(ask1, ask2, ask3, ask4, ask5, ask6, ask7, ask8, ask9, ask10) as ask, fixedLengthArrayVector(askqty1, askqty2, askqty3, askqty4, askqty5, askqty6, askqty7, askqty8, askqty9, askqty10) as askqty, iif((bid1 != 0 and ask1 != 0), 0, iif(bid1 == 0, -1, 1)) as limit_flag from OBData where date(data_time) = caldate and ticker in symbol
+	// 按成交量加权计算买卖五档加权中间价
+	tmp = select ticker, data_time, limit_flag, ((each(sum, ask[0:level] * askqty[0:level]) \ each(sum, askqty[0:level])) + (each(sum, bid[0:level] * bidqty[0:level]) \ each(sum, bidqty[0:level]))) \ 2 as midwaskbid from tmp
+	// 高开低收
+	tmp = select ticker, data_time, last(limit_flag) as limit_flag, first(midwaskbid) as first_price, last(midwaskbid) as last_price, max(midwaskbid) as high_price, min(midwaskbid) as low_price, last(midwaskbid) as mid_price from tmp group by ticker, interval(data_time, t, 'none') as data_time
+	if(tmp.size() == 0){
+		return tmp
+	}
+	ticker = symbol
+	// 对齐时间窗口, 除完以后就是半天交易时段数据的条数
+	n = 7200000 / t
+	// 构造完整连续的时间序列
+	timeSeries = 09:30:00.000 + 0..(n - 1) * t
+	timeSeries.append!(13:00:00.000 + 0..(n - 1) * t)
+	// 格式化为 timestamp 类型(原表类型为 timestamp)
+	timeSeries = timestamp(take(string(caldate[0]) + 'T', n * 2) + string(timeSeries))
+	// 构造前两列 ticker, data_time
+	demo = table(take(take(ticker, timeSeries.size()), symbol.size() * timeSeries.size()).sort() as ticker, take(timeSeries, symbol.size() * timeSeries.size()) as data_time)
+	res = lj(demo, tmp, `ticker`data_time)
+	res = select limit_flag, first_price, last_price, high_price, low_price, mid_price from res group by ticker, interval(data_time, t, 'prev') as data_time
+	res = select * from res where (time(data_time) < 11:30:00.000) or (time(data_time) >=13:00:00.000)
+	// 涨停时间的相关价格信息设为 NULL
+	update res set first_price = NULL, last_price = NULL, high_price = NULL, low_price = NULL, mid_price = NULL where limit_flag == 1
+	return res
+}
+
+// 计算转折点
+def get_reversal_points(mid_price, threshold = 0.002){
+	prices = array(DOUBLE,0,100)
+	turning_points = array(INT,0,100)
+	reversal_points = array(INT,0,100)
+	local_extrema = array(INT,0,100)
+	last_tp = int(NULL)
+	last_tp_type = bool(NULL)
+	p1 = int(NULL)
+	awaiting_reversal = false
+	len = mid_price.size()
+	for (i in 0..(len-1)){
+		prices.append!(mid_price[i])
+		if (prices.size() == 1){
+			p1 = prices[0]
+		}
+		if (prices.size() < 3){
+			continue
+		}
+		price_chg = (mid_price[i] - prices[last(turning_points)]) \ prices[last(turning_points)]
+		if (last_tp_type == true and turning_points.size() > 0 and price_chg < -threshold){
+			if (awaiting_reversal == false){
+				reversal_points.append!(prices.size() - 1)
+				awaiting_reversal = true
+			}
+		}
+		else if (last_tp_type == false and turning_points.size() > 0 and price_chg > threshold){
+			if (awaiting_reversal == true){
+				reversal_points.append!(prices.size()-1)
+				awaiting_reversal = false
+			}
+		}
+
+		if ((prices[i-1]>=prices[i-2] and prices[i-1]>prices[i]) or (prices[i-1] <= prices[i-2] and prices[i-1] < prices[i])){
+			local_extrema.append!(i-1)
+		}
+
+		price_chg_now = (prices[i] - prices[i-1]) \ prices[i-1]
+		if (prices[i-1] >= prices[i-2] and (price_chg_now <= -threshold)){
+			if (awaiting_reversal == false){
+				reversal_points.append!(prices.size() - 1)
+				awaiting_reversal = true
+			}
+		}
+		else if (prices[i-1] <= prices[i-2] and (price_chg_now >= threshold)){
+			if (awaiting_reversal == true){
+				reversal_points.append!(prices.size()-1)
+				awaiting_reversal = false
+			}
+		}
+
+		if (local_extrema.size() > 0){
+			p2 = prices[last(local_extrema)]
+			tp = iif(p2 > p1,1,0)
+			if (abs(p2 - p1) \ p1 < threshold){
+				if (last_tp == tp and ((last_tp == 1 and p2 > p1) or (last_tp == 0 and p2 < p1))){
+					turning_points[turning_points.size()-1] = last(local_extrema)
+					p1 = p2
+				}
+			}
+			else{
+				if (last_tp == NULL or last_tp != tp){
+					turning_points.append!(last(local_extrema))
+					last_tp = tp
+					p1 = p2
+					last_tp_type = iif(tp == 1, true, false)
+				}
+				else{
+					if ((last_tp == 1 and p2 > p1) or (last_tp == 0 and p2 < p1)){
+						turning_points[turning_points.size() - 1] = last(local_extrema)
+						p1 = p2
+					}
+				}
+			}
+		}
+	}
+	return turning_points, reversal_points
+}
+
+def get_duration(id, price){
+	tp, rp = get_reversal_points(price)
+	tp = tp + first(id)
+	rp = rp + first(id)
+	turning_points = iif(id in tp, 1, 0)
+	reversal_points = iif(id in rp, 1, 0)
+	return turning_points, reversal_points
+}
+
+def get_initialPoints(mid_price, turning_points, reversal_points, offset){
+	len = turning_points.size()
+	initPoint = array(DOUBLE, 0, len)
+	init_id = array(INT, 0, len)
+	interval_id = array(INT, 0, len)
+	p1 = mid_price[0]
+	p2 = mid_price[0]
+	p3 = 0
+	p4 = 0
+	id = 1
+	has_turning = false
+	for (i in 0..(len - 1)){
+		if (reversal_points[i] == 1){
+			p1 = p2
+			p3 = p4
+			if (has_turning == true){
+				id += 1
+				has_turning = false
+			}
+		}
+		if (turning_points[i] == 1){
+			p2 = mid_price[i]
+			p4 = i
+			has_turning = true
+		}
+		initPoint.append!(p1)
+		init_id.append!(p3 + offset)
+		interval_id.append!(id)
+	}
+	return initPoint, init_id, interval_id
+}
+
+defg betaPlus(a){
+    return  beta(a, 1..a.size())
+}
+
+def get_highest_lowest_factors(id, turning_points, mid_price, initialPoints, initialId){
+	type = false
+	initPrice = initialPoints[0]
+	// 根据 mid_price 与初始价格的比较确定 type 变量
+	if (mid_price[find(turning_points, 1)] > initPrice){
+		type = true
+	}
+	len = mid_price.size()
+	initID = initialId[0]
+	
+	toLocalDuration = array(INT, 0, len)
+	toLocalAmplitude = array(DOUBLE, 0, len)
+	toInitialDuration = array(INT, 0, len)
+	toInitialAmplitude = array(DOUBLE, 0, len)
+	if (type == false){
+		min_pos = 0
+		min_price = mid_price[0]
+		// 通过迭代 mid_price 计算各种持续时间和振幅
+		for (i in 0..(len - 1)){
+			if (mid_price[i] < min_price){
+				min_pos = i
+				min_price = mid_price[i]
+			}
+			toLocalDuration.append!(i - min_pos)
+			toLocalAmplitude.append!((mid_price[i] \ min_price) - 1)
+			toInitialDuration.append!(id[min_pos] - initID)
+			toInitialAmplitude.append!((min_price \ initPrice) - 1)
+		}
+	}
+	else{
+		max_pos = 0
+		max_price = mid_price[0]
+		for (i in 0..(len - 1)){
+			if (mid_price[i] > max_price){
+				max_pos = i
+				max_price = mid_price[i]
+			}
+			toLocalDuration.append!(i - max_pos)
+			toLocalAmplitude.append!((mid_price[i] \ max_price) - 1)
+			toInitialDuration.append!(id[max_pos] - initID)
+			toInitialAmplitude.append!((max_price \ initPrice) - 1)
+		}
+	}
+	return toLocalDuration, toLocalAmplitude, toInitialDuration, toInitialAmplitude
+}
+
+def get_RSI(turning_points, mid_price, initialPoints){
+	price_diff_1 = deltas(mid_price)
+	m = 1
+	n = 2
+	type = false
+	initPrice = initialPoints[0]
+	if (mid_price[find(turning_points,1)]>initPrice){
+		type=true
+	}
+	diff_abs = gema(abs(price_diff_1),n,m\(n+1))
+	if (type == true){
+		diff_up = gema(iif(price_diff_1>0,price_diff_1,0),n,m\(n+1))
+		return diff_up\diff_abs
+	}
+	else{
+		diff_down = gema(iif(price_diff_1<0,price_diff_1,0),n,m\(n+1))
+		return diff_down\diff_abs
+	}
+}
+
+// 计算第一个低点/高点到第二个低点/高点的涨幅, 第二个低点/高点到第三个低点/高点的涨幅
+def get_history_turning(mid_price, turning_points,reversal_points, high_low_points, internal_id){
+	preTurning = double(NULL)
+	preTwoTurning = double(NULL)
+	preFirstLow = double(NULL)
+	preSecondLow = double(NULL)
+	preThirdLow = double(NULL)
+	preFirstHigh = double(NULL)
+	preSecondHigh = double(NULL)
+	preThirdHigh = double(NULL)
+	preFLID = int(NULL)
+	preSLID = int(NULL)
+	preTLID = int(NULL)
+	preFHID = int(NULL)
+	preSHID = int(NULL)
+	preTHID = int(NULL)
+	recentFLA = double(NULL)
+	recentSLA = double(NULL)
+	recentFHA = double(NULL)
+	recentSHA = double(NULL)
+	rTH =  int(NULL)
+	rTL =  int(NULL)
+	dP1 = int(NULL)
+	dP2 = int(NULL)
+	dP3 = int(NULL)
+	dP4 = int(NULL)
+	dP5 = int(NULL)
+	tmp = 0.0
+	len = turning_points.size()
+	historyPoint = array(DOUBLE, 0, len)
+	recentFirstLowAmplitude = array(DOUBLE, 0, len)
+	recentSecondLowAmplitude = array(DOUBLE, 0, len)
+	recentFirstHighAmplitude = array(DOUBLE, 0, len)
+	recentSecondHighAmplitude = array(DOUBLE, 0, len)
+	recentThirdHighLow = array(DOUBLE, 0, len)
+	difPrice1 = array(DOUBLE, 0, len)
+	difPrice2 = array(DOUBLE, 0, len)
+	difPrice3 = array(DOUBLE, 0, len)
+	difPrice4 = array(DOUBLE, 0, len)
+	difPrice5 = array(DOUBLE, 0, len)
+	internal = internal_id[0]
+	flag = bool(NULL)
+	for (i in 0..(len - 1)){
+		if (internal != internal_id[i]){
+			preTwoTurning = preTurning
+			preTurning = tmp
+			internal = internal_id[i]
+		}
+		if (turning_points[i] == 1){
+			tmp = mid_price[i]
+		}
+		if (reversal_points[i] == 1){
+			recentFLA = preFirstLow \ preSecondLow
+			recentSLA = preSecondLow \ preThirdLow
+			recentFHA = preFirstHigh \ preSecondHigh
+			recentSHA = preSecondHigh \ preThirdHigh
+			rTH = preTHID
+			rTL = preTLID
+			if (flag == true){
+				dP1 = preFirstHigh-preFirstLow
+				dP2 = preFirstLow-preSecondHigh
+				dP3 = preSecondHigh-preSecondLow
+				dP4 = preSecondLow-preThirdHigh
+				dP5 = preThirdHigh-preThirdLow
+			}
+			else{
+				dP1 = preFirstLow - preFirstHigh
+				dP2 = preFirstHigh - preSecondLow
+				dP3 = preSecondLow - preSecondHigh
+				dP4 = preSecondHigh - preThirdLow
+				dP5 = preThirdLow - preThirdHigh
+			}
+		}
+		if (flag == true){
+			if (rTH != NULL){
+				recentThirdHighLow.append!(beta(mid_price[rTH:(i+1)], 1..(i+1-rTH)))
+			}
+			else{
+				recentThirdHighLow.append!(NULL)
+			}
+		}
+		else{
+			if (rTL !=NULL){
+				recentThirdHighLow.append!(beta(mid_price[rTL:(i+1)], 1..(i+1-rTL)))
+			}
+			else{
+				recentThirdHighLow.append!(NULL)
+			}
+		}
+		//append
+		if (high_low_points[i]==1){
+			preThirdHigh = preSecondHigh
+			preSecondHigh = preFirstHigh
+			preFirstHigh=mid_price[i]
+			preTHID = preSHID
+			preSHID = preFHID
+			preFHID=i
+			flag=true
+		}
+		if (high_low_points[i]==-1){
+			preThirdLow = preSecondLow
+			preSecondLow = preFirstLow
+			preFirstLow=mid_price[i]
+			preTLID = preSLID
+			preSLID = preFLID
+			preFLID=i
+			flag=false
+		}
+		historyPoint.append!(preTwoTurning)
+		recentFirstLowAmplitude.append!(recentFLA)
+		recentSecondLowAmplitude.append!(recentSLA)
+		recentFirstHighAmplitude.append!(recentFHA)
+		recentSecondHighAmplitude.append!(recentSHA)
+		difPrice1.append!(dP1)
+		difPrice2.append!(dP2)
+		difPrice3.append!(dP3)
+		difPrice4.append!(dP4)
+		difPrice5.append!(dP5)
+	}
+	return historyPoint, recentFirstLowAmplitude, recentSecondLowAmplitude, recentFirstHighAmplitude, recentSecondHighAmplitude, recentThirdHighLow,difPrice1,difPrice2,difPrice3,difPrice4,difPrice5
+}
+
+def get_inWindow(id, initialId){
+	arr = id - initialId
+	return iif(arr < 50, 0, 1)
+}
+
+def get_momentum_factors(){
+	metrics=[<data_time>, <ticker>, <mid_price>, <limit_seg>, <initialPoints>, <recentFirstLowAmplitude>, <recentSecondLowAmplitude>, <recentFirstHighAmplitude>,<recentSecondHighAmplitude>, <difPrice1>, <difPrice2>, <difPrice3>, <difPrice4>, <difPrice5>]
+	metrics.append!(sqlColAlias(parseExpr("get_inWindow(id, initialId)"), `inWindow))
+	// 涨幅
+	metrics.append!(sqlColAlias(parseExpr("(mid_price - initialPoints)"), `Amplitude))
+	// 从起点到当前每个数据点价格变化的绝对值之和
+	metrics.append!(sqlColAlias(parseExpr("abs(mid_price - initialPoints) / cumsum(abs(mid_price - initialPoints))"), `Fluency))
+	metrics.append!(sqlColAlias(parseExpr("id - initialId"), `initialToLocalDuration))
+	// 最高/低点位置到当下的时长, 最高/低点价格到当下的幅度
+	metrics.append!(sqlColAlias(parseExpr("get_highest_lowest_factors(id, turning_points, mid_price, initialPoints, initialId)"),`extreToLocalDuration`extreToLocalAmplitude`extreToInitialDuration`extreToInitialAmplitude))
+	metrics.append!(sqlColAlias(parseExpr("cumavg(deltas(mid_price))\\cumstdp(deltas(mid_price))"), `Stability))
+	metrics.append!(sqlColAlias(parseExpr("(mid_price - historyPoint) / historyPoint"), `historyAmplitude))
+	return metrics
+}
+
+def get_rsi_inner(price, i){
+	arr = price[i.initialId : (i.id + 1)]
+	m = 1
+	n = 2
+	price_diff_1 = deltas(arr)
+	diff_abs = sum(abs(price_diff_1))
+	
+	if (i.mid_price > i.initialPoints){
+		diff_up = sum(iif(price_diff_1 > 0, price_diff_1 ,0))
+		return double(abs(diff_up \ diff_abs))
+	}
+	else{
+		diff_down = sum(iif(price_diff_1 < 0, price_diff_1, 0))
+		return double(abs(diff_down \ diff_abs))
+	}
+}
+
+def get_rsi(t, calDate){
+	rsi = array(DOUBLE, 0, 100)
+	for (i in calDate){
+		price = exec mid_price from t where date(data_time) = i
+		each_t = select * from t where date(data_time) = i
+		p = peach(get_rsi_inner{price, }, each_t)
+		rsi.join!(p)
+	}
+	return rsi
+}
+
+defg get_moving_RSI(price_diff_1){
+	diff_up = sum(iif(price_diff_1 > 0, price_diff_1, 0))
+	diff_abs = sum(abs(price_diff_1))
+	return double(abs(diff_up \ diff_abs))
+}
+
+defg get_moving_Amplitude(mid_price){
+	return (last(mid_price) - first(mid_price))
+}
+
+def get_moving_window_factors(t, windowSize=30){
+	metrics=[<data_time>, <ticker>, <mid_price>, <limit_seg>, <initialPoints>]
+	win = string(windowSize - 1)
+	// 最高点位置到当前的时长
+	metrics.append!(sqlColAlias(parseExpr("(0.." + win + ").append!(take(" + win + ",mid_price.size() - " + string(windowSize) + ")) - mimax(mid_price," + string(windowSize) + ", 1)"), `highestToLocalDuration))
+	// 最低点位置到当前的时长
+	metrics.append!(sqlColAlias(parseExpr("(0.." + win + ").append!(take(" + win + ", mid_price.size() - "+ string(windowSize) + ")) - mimin(mid_price, " + string(windowSize) + ", 1)"), `lowestToLocalDuration))
+	// 最高点价格到当前的幅度
+	metrics.append!(sqlColAlias(parseExpr("mid_price\\mmax(mid_price," + string(windowSize) + ", 1)"), `highestToLocalAmplitude))
+	// 最低点价格到当前的幅度
+	metrics.append!(sqlColAlias(parseExpr("mid_price\\mmin(mid_price," + string(windowSize) + ", 1)"), `lowestToLocalAmplitude))
+	// 30 个窗口内的变化幅度
+	metrics.append!(sqlColAlias(parseExpr("moving(get_moving_Amplitude, mid_price," + string(3000 / t) + ", 1)"), "movingAmplitude"))//modified mod
+
+	windows = [3, 6, 10, 15]
+	for (w in windows){//w = windows[0]
+		windowTime = w * 1000 / t
+		metrics.append!(sqlColAlias(parseExpr("moving(betaPlus, mid_price," + string(windowTime) + ", 1)"), "movingBeta_" + w + "s"))
+		metrics.append!(sqlColAlias(parseExpr("moving(get_moving_RSI, deltas(mid_price)," + string(windowTime) + ", 1)"), "movingRSI_" + w + "s"))
+	}
+	return metrics
+}
+
+// 以每天每支股票来计算
+def get_obchg_factors_inner(obchg, i){
+	p = obchg[i.initialId:(i.id + 1)]
+	return sum(p), avg(p), sum(iif(p > 0, 1, 0)) \ p.size()
+}
+
+// 计算obchg相关特征
+def get_obchg_factors(jtable, symbol, calDate){
+	cumOb = array(DOUBLE, 0, 100)
+	avgOb = array(DOUBLE, 0, 100)
+	posOb = array(DOUBLE, 0, 100)
+	for (i in calDate){// i = calDate[0]
+		obchg = exec obchg from jtable where date(data_time) = i and ticker = symbol[0]
+		each_t = select * from jtable where date(data_time) = i and ticker = symbol[0]
+		p = peach(get_obchg_factors_inner{obchg, }, each_t)
+		// p[, 0]: sum(p)
+		cumOb.join!(p[, 0])
+		// p[, 1]: avg(p)
+		avgOb.join!(p[, 1])
+		// p[, 2]: sum(iif(p > 0, 1, 0)) \ p.size(), obchg是正数的频率
+		posOb.join!(p[, 2])
+	}
+	return cumOb, avgOb, posOb
+}
+
+// 计算 obchg 是正数的频率
+defg get_moving_positive_obchg(obchg){
+	return sum(iif(obchg > 0, 1, 0)) \ obchg.size()
+}
+
+// 当使用accumulate()时, cumValue时init, x是X
+def cumPositive(cumValue, x){
+	if (x > 0){
+		return cumValue + 1
+	}
+	else{  
+		return 0
+	}
+}
+
+def cumNegative(cumValue, x){
+	if (x < 0){
+		return cumValue - 1
+	}
+	else{  
+		return 0
+	}
+}
+
+def get_AQD_factors_inner(AQD, i){
+	p = AQD[i.initialId:(i.id + 1)]
+	return sum(p), avg(p), sum(iif(p > 0, 1, 0)) \ p.size()
+}
+
+def get_AQD_factors(jtable, colName, calDate){
+	cumAQD = array(DOUBLE, 0, 100)
+	avgAQD = array(DOUBLE, 0, 100)
+	posAQD = array(DOUBLE, 0, 100)
+	for (i in calDate){
+		AQD = sql(select=sqlCol(colName), from = jtable, where=<date(data_time) = i>,exec=true).eval()
+		each_t = select * from jtable where date(data_time) = i
+		p = peach(get_AQD_factors_inner{AQD, }, each_t)
+		cumAQD.join!(p[, 0])
+		avgAQD.join!(p[, 1])
+		posAQD.join!(p[, 2])
+	}
+	return cumAQD, avgAQD, posAQD
+}
+
+def getRSV(mid_price, window, t){
+	rt = log(mid_price \ move(mid_price, 1))
+	// 正数
+	pos = iif(rt > 0, 1, 0)
+	// 负数
+	neg = iif(rt < 0, 1, 0)
+	rt_pos = pos * rt
+	rt_neg = neg * rt
+	n = window / t
+	// RSV 开根号
+	return sqrt(msum2(rt_pos, n, 1)), sqrt(msum2(rt_neg, n, 1))
+}
+
+defg calPress(ask1, ask2, ask3, ask4, ask5, ask6, ask7, ask8, ask9, ask10, bid1, bid2, bid3, bid4, bid5, bid6, bid7, bid8, bid9, bid10, askqty1, askqty2, askqty3, askqty4, askqty5, askqty6, askqty7, askqty8, askqty9, askqty10,bidqty1, bidqty2, bidqty3, bidqty4, bidqty5, bidqty6, bidqty7, bidqty8, bidqty9, bidqty10, level=5){
+	// test_prev = select * from test context by ticker, date(data_time)
+	// ask = matrix(test_prev["ask1"], test_prev["ask2"], test_prev["ask3"], test_prev["ask4"], test_prev["ask5"], test_prev["ask6"], test_prev["ask7"], test_prev["ask8"], test_prev["ask9"], test_prev["ask10"])
+	// bid = matrix(test_prev["bid1"], test_prev["bid2"], test_prev["bid3"], test_prev["bid4"], test_prev["bid5"], test_prev["bid6"], test_prev["bid7"], test_prev["bid8"], test_prev["bid9"], test_prev["bid10"])
+	// askqty = matrix(test_prev["askqty1"], test_prev["askqty2"], test_prev["askqty3"], test_prev["askqty4"], test_prev["askqty5"], test_prev["askqty6"], test_prev["askqty7"], test_prev["askqty8"], test_prev["askqty9"], test_prev["askqty10"])
+	// bidqty = matrix(test_prev["bidqty1"], test_prev["bidqty2"], test_prev["bidqty3"], test_prev["bidqty4"], test_prev["bidqty5"], test_prev["bidqty6"], test_prev["bidqty7"], test_prev["bidqty8"], test_prev["bidqty9"], test_prev["bidqty10"])
+
+	/* bid为10档申买价构成的矩阵, 示例: matrix(bid1, bid2, bid3, bid4, bid5, bid6, bid7, bid8, bid9, bid10)
+	 * bidqty为10档申买量构成的矩阵, 示例: matrix(bidqty1, bidqty2, bidqty3, bidqty4, bidqty5, bidqty6, bidqty7, bidqty8, bidqty9, bidqty10)
+	 * ask为10档申卖价构成的矩阵, 示例: matrix(ask1, ask2, ask3, ask4, ask5, ask6, ask7, ask8, ask9, ask10)
+	 * askqty为10档申卖量构成的矩阵, 示例: matrix(askqty1, askqty2, askqty3, askqty4, askqty5, askqty6, askqty7, askqty8, askqty9, askqty10)
+	 */
+	// 合并为一个向量
+	bid=bid1.join(bid2).join(bid3).join(bid4).join(bid5).join(bid6).join(bid7).join(bid8).join(bid9).join(bid10)
+	ask = ask1.join(ask2).join(ask3).join(ask4).join(ask5).join(ask6).join(ask7).join(ask8).join(ask9).join(ask10)
+	bidqty = bidqty1.join(bidqty2).join(bidqty3).join(bidqty4).join(bidqty5).join(bidqty6).join(bidqty7).join(bidqty8).join(bidqty9).join(bidqty10)
+	askqty = askqty1.join(askqty2).join(askqty3).join(askqty4).join(askqty5).join(askqty6).join(askqty7).join(askqty8).join(askqty9).join(askqty10)
+	// 平均价格
+	mid = iif((bid1[0] != 0 and ask1[0] != 0), (bid1[0] + ask1[0]) \ 2, iif(bid1[0] == 0, ask1[0], bid1[0]))
+	// 计算交易量加权平均交易价格
+	WAP = (bid1 * askqty1 + ask1 * bidqty1) \ (bidqty1 + askqty1)
+	if(mid.size() ==0){
+		return double(), double(), double(), double()
+    }
+	bidWapSum = sum((mid \ (bid-mid))[0 : level])
+	askWapSum = sum((mid \ (ask-mid))[0 : level])
+	BidPress = sum((bidqty * mid \ (bid - mid))[0 : level] \ bidWapSum)
+    AskPress = sum((askqty * mid \ (ask - mid))[0 : level] \ askWapSum)
+	Press = log(AskPress) - log(BidPress)
+	return avg(Press)
+}
+
+/**
+ * @description: 
+ * @param ifWavg: 是否计算加权平均数
+ * @return {*}
+ */
+def getQuotaChg(calDate, symbol, OBData, t, ifWavg, level){
+	for(i in calDate){// i = calDate[0]
+		if(i == calDate[0]){
+			if (ifWavg == true){
+				// 计算按成交量加权计算买卖五档加权中间价, 高开低收
+				test = prepareOBData_wavg(i, symbol, OBData, t, level)
+			}
+			else{
+				// 按 t 秒聚合, 填补空值
+				test = prepareOBData_last(i, symbol, OBData, t)
+			}
+		}
+		else{
+			if (ifWavg == true){
+				tmp = prepareOBData_wavg(i, symbol, OBData, t, level)
+			}
+			else{
+				tmp = prepareOBData_last(i, symbol, OBData, t)
+			}
+			test.append!(tmp)
+			undef("tmp")
+		}
+	}
+	// 不计算加权平均数
+	if (ifWavg == false){
+		test = select ticker, data_time, (ask1 + bid1) \ 2 as mid_price, iif((bid1 != 0 and ask1 != 0), 0, iif(bid1 == 0, -1, 1)) as limit_flag, calPress(ask1, ask2, ask3, ask4, ask5, ask6, ask7, ask8, ask9, ask10, bid1, bid2, bid3, bid4, bid5, bid6, bid7, bid8, bid9, bid10, askqty1, askqty2, askqty3, askqty4, askqty5, askqty6, askqty7, askqty8, askqty9, askqty10, bidqty1, bidqty2, bidqty3, bidqty4, bidqty5, bidqty6, bidqty7, bidqty8, bidqty9, bidqty10, 5) as `Press from test context by data_time, ticker order by ticker, data_time
+	}
+	dayLen1 = test.size() / calDate.size() / symbol.size()
+	// 计算加权平均数
+	if (ifWavg == true){
+		for(i in calDate){
+			if(i == calDate[0]){
+				press = prepareOBData_last(i, symbol, OBData, t)
+			}
+			else{
+				tmp = prepareOBData_last(i, symbol, OBData, t)
+				press.append!(tmp)
+				undef("tmp")
+			}
+		}
+		press = select ticker,data_time, calPress(ask1, ask2, ask3, ask4, ask5, ask6, ask7, ask8, ask9, ask10, bid1, bid2, bid3, bid4, bid5, bid6, bid7, bid8, bid9, bid10, askqty1, askqty2, askqty3, askqty4, askqty5, askqty6, askqty7, askqty8, askqty9, askqty10,bidqty1, bidqty2, bidqty3, bidqty4, bidqty5, bidqty6, bidqty7, bidqty8, bidqty9, bidqty10, 5) as `Press from press context by data_time,ticker
+		test = select take(0..(dayLen1 - 1), test.size()) as id, data_time, ticker, high_price as high, low_price as low, first_price as open, last_price as close, mid_price,limit_flag from test
+		test = lj(test, press, `data_time`ticker)
+	}
+	else{
+		test = select take(0..(dayLen1 - 1), test.size()) as id, data_time, ticker, mid_price, limit_flag, Press from test
+	}
+	test = select *, segment(limit_flag, false) as limit_seg from test context by date(data_time), ticker
+	//处理涨跌停
+	momentum_factors = select *, get_duration(id, mid_price) as `turning_points`reversal_points, int(0) as high_low_points from test context by date(data_time), ticker, limit_seg
+	// high_low_points 最高最低点
+	update momentum_factors set high_low_points = iif(turning_points == 1, iif(isPeak(mid_price, false) == 1, 1, -1), 0)
+	// 计算上一个转折点的 mid_price 及对应的 id
+	momentum_factors = select *, get_initialPoints(mid_price, turning_points, reversal_points, first(id)) as `initialPoints`initialId`interval_id from momentum_factors context by date(data_time), ticker, limit_seg
+	momentum_factors = select *, get_history_turning(mid_price, turning_points, reversal_points, high_low_points, interval_id) as `historyPoint`recentFirstLowAmplitude`recentSecondLowAmplitude`recentFirstHighAmplitude`recentSecondHighAmplitude`recentThirdHighLow`difPrice1`difPrice2`difPrice3`difPrice4`difPrice5 from momentum_factors context by date(data_time), ticker, limit_seg
+	
+	//2023.10.08
+	ms = sql(select=get_momentum_factors(), from=momentum_factors, groupBy=(sqlColAlias(parseExpr("date(data_time)"), `date), sqlCol(`ticker), sqlCol(`limit_seg), sqlCol(`interval_id)), groupFlag=0).eval()
+	ms = select *,
+		// 变化速率
+		Amplitude \ initialToLocalDuration as `Velocity,
+		// 流畅度 RSI
+		get_rsi(momentum_factors, calDate) as `RSI,
+		// (pricedif 1-5 的绝对值 + Amplitude 的绝对值)的平均值
+		((abs(difPrice1)) + (abs(difPrice2)) + (abs(difPrice3)) + (abs(difPrice4)) + (abs(difPrice5)) + (abs(Amplitude))) \ 6 as Volatility,
+		// RSV_pos, RSV_neg
+		getRSV(mid_price, 120000, t) as `RSV_pos_2min`RSV_neg_2min,
+		getRSV(mid_price, 300000, t) as `RSV_pos_5min`RSV_neg_5min,
+		getRSV(mid_price, 600000, t) as `RSV_pos_10min`RSV_neg_10min from ms
+	// 以 50 的滑动窗口计算 mid_price 的最小二乘估计
+	ms = select *, moving(betaPlus, mid_price, 50, 1) as `tmpVelo from ms context by date(data_time), ticker, limit_seg
+	update ms set Velocity = tmpVelo where inWindow == 0 context by date(data_time), ticker,limit_seg
+	dropColumns!(ms, `tmpVelo)
+	dropColumns!(momentum_factors, `difPrice1`difPrice2`difPrice3`difPrice4`difPrice5)
+	
+	update ms set Amplitude = NULL, initialToLocalDuration = NULL, extreToLocalDuration = NULL, extreToLocalAmplitude = NULL, extreToInitialDuration = NULL, extreToInitialAmplitude = NULL, Stability = NULL, Velocity=NULL, RSV_pos_2min=NULL, RSV_pos_5min=NULL, RSV_pos_10min=NULL,  RSV_neg_2min=NULL, RSV_neg_5min=NULL, RSV_neg_10min=NULL where limit_seg == 1
+	// 剔除14: 57后的数据
+	momentum_factors = removeDailyTimeSeries(momentum_factors)
+	ms = removeDailyTimeSeries(ms)
+	return momentum_factors, ms
+}
+
+def getWindowFactors(calDate, momentum_factors, OBCHG, mutable ActiveStockQtyDifFactors, mutable ActiveOrderQtyDifFactors, t){
+	windowFactors = sql(select=get_moving_window_factors(t), from=momentum_factors,groupBy=(sqlColAlias(parseExpr("date(data_time)"), `date), sqlCol(`ticker), sqlCol(`limit_seg)), groupFlag=0).eval()
+	
+	update windowFactors set highestToLocalDuration = NULL, lowestToLocalDuration = NULL, highestToLocalAmplitude = NULL, lowestToLocalAmplitude = NULL, movingAmplitude = NULL, movingBeta_3s = NULL, movingBeta_6s = NULL, movingBeta_10s = NULL, movingBeta_15s = NULL where limit_seg % 2 == 1
+	// retMean: 相邻元素之差的累积平均值
+	tmp = select *, cumavg(deltas(mid_price)).nullFill!(0.0) as retMean from momentum_factors context by date(data_time), ticker, limit_seg, interval_id
+	
+	//do obchg first
+	jtable = lj(tmp, OBCHG, `data_time`ticker`limit_seg)
+	
+	if(t == 100){
+	// 计算 obchg 相关特征
+	obchg_features = select data_time, ticker, obchg, retMean, 
+		// mBetaObchg: obchg累积和的最小二乘估计
+		moving(betaPlus, cumsum(obchg), 1000 / t, 1) as mBetaObchg_1s, 
+		moving(betaPlus, cumsum(obchg), 3000 / t, 1) as mBetaObchg_3s, 
+		moving(betaPlus, cumsum(obchg), 5000 / t, 1) as mBetaObchg_5s,  
+		moving(betaPlus, cumsum(obchg), 10000 / t, 1) as mBetaObchg_10s, 
+		// posObchg: obchg是正数的频率
+		moving(get_moving_positive_obchg, obchg, 1000 / t, 1) as posObchg_1s, 
+		moving(get_moving_positive_obchg, obchg, 3000 / t, 1) as posObchg_3s, 
+		moving(get_moving_positive_obchg, obchg, 5000 / t, 1) as posObchg_5s, 
+		moving(get_moving_positive_obchg, obchg, 10000 / t, 1) as posObchg_10s, 
+		// mavgObchg: obchg的平均值
+		mavg(obchg, 1000 / t, 1) as mavgObchg_1s,
+		mavg(obchg, 3000 / t, 1) as mavgObchg_3s,
+		mavg(obchg, 5000 / t, 1) as mavgObchg_5s,
+		mavg(obchg, 10000 / t, 1) as mavgObchg_10s,
+		// SMDObchg: 变异系数(平均值 \ 标准差, 表示数据相对于平均值的离散程度)
+		mavg(obchg, 1000 / t, 1) \ mstdp(obchg , 1000 / t, 1) as SMDObchg_1s,
+		mavg(obchg, 3000 / t, 1) \ mstdp(obchg , 3000 / t, 1) as SMDObchg_3s,
+		mavg(obchg, 5000 / t, 1) \ mstdp(obchg , 5000 / t, 1) as SMDObchg_5s,
+		mavg(obchg, 10000 / t, 1) \ mstdp(obchg, 10000 / t, 1) as SMDObchg_10s
+		
+		from jtable context by date(data_time), ticker,limit_seg
+	}
+	else{
+		obchg_features = select data_time, ticker, obchg, retMean, 
+		moving(betaPlus,cumsum(obchg),3000/t,1) as mBetaObchg_3s, 
+		moving(betaPlus,cumsum(obchg),5000/t,1) as mBetaObchg_5s,  
+		moving(betaPlus,cumsum(obchg),10000/t,1) as mBetaObchg_10s, 
+		
+		moving(get_moving_positive_obchg,obchg,3000/t,1) as posObchg_3s, 
+		moving(get_moving_positive_obchg,obchg,5000/t,1) as posObchg_5s, 
+		moving(get_moving_positive_obchg,obchg,10000/t,1) as posObchg_10s, 
+		
+		mavg(obchg,3000/t,1) as mavgObchg_3s,
+		mavg(obchg,5000/t,1) as mavgObchg_5s,
+		mavg(obchg,10000/t,1) as mavgObchg_10s,
+
+		mavg(obchg,3000/t,1)\mstdp(obchg,3000/t,1) as SMDObchg_3s,
+		mavg(obchg,5000/t,1)\mstdp(obchg,5000/t,1) as SMDObchg_5s,
+		mavg(obchg,10000/t,1)\mstdp(obchg,10000/t,1) as SMDObchg_10s
+		
+		from jtable context by date(data_time), ticker,limit_seg
+	}
+	// retMMBO: 相邻元素之差的累积平均值 / 5s的obchg累积和的最小二乘估计
+	// mPositiveMBO: 5s的obchg累积和的最小二乘估计在50个窗口内为正数的频率
+	// cumPositiveMBO: 0是init, mBetaObchg_5s是X, 计算mBetaObchg_5s为正数的次数
+	// cumNegativeMBO: 计算mBetaObchg_5s为负数的次数, 加负号是标识它为负数
+	// 
+	obchg_features = select *, retMean \ mBetaObchg_5s as retMMBO, moving(get_moving_positive_obchg, mBetaObchg_5s, 50, 1) as mPositiveMBO, accumulate(cumPositive, mBetaObchg_5s, 0) as cumPositiveMBO, accumulate(cumNegative, mBetaObchg_5s, 0) as cumNegativeMBO, get_obchg_factors(jtable, ticker, calDate) as `intervalCumObchg`intervalAvgObchg`intervalPosObchg from obchg_features context by ticker
+	// ActiveStockQtyDifFactors增加id, initialId两列
+	update ActiveStockQtyDifFactors set id = id, initialId = initialId from lj(ActiveStockQtyDifFactors, momentum_factors,`data_time`ticker)
+
+	ActiveStockQtyDifFactors = select data_time, ticker, ActiveStockQtyDif, cumSumASQDif, movingSASQDifBeta, posASQDif, mavgASQDif, SMDASQDif, get_AQD_factors(ActiveStockQtyDifFactors, `ActiveStockQtyDif, calDate) as `intervalCumASQD`intervalAvgASQD`intervalASQD from ActiveStockQtyDifFactors
+	// ActiveOrderQtyDifFactors增加id, initialId两列
+	update ActiveOrderQtyDifFactors set id = id, initialId = initialId from lj(ActiveOrderQtyDifFactors, momentum_factors, `data_time`ticker)
+	
+	ActiveOrderQtyDifFactors = select data_time, ticker, ActiveOrderQtyDif, cumSumAOQDif, movingSAOQDifBeta, posAOQDif, mavgAOQDif, SMDAOQDif, get_AQD_factors(ActiveOrderQtyDifFactors, `ActiveOrderQtyDif, calDate) as `intervalCumAOQD`intervalAvgAOQD`intervalAOQD from ActiveOrderQtyDifFactors
+	// 剔除14: 57后的数据
+	windowFactors=removeDailyTimeSeries(windowFactors)
+	obchg_features=removeDailyTimeSeries(obchg_features)
+	return windowFactors, obchg_features, ActiveStockQtyDifFactors, ActiveOrderQtyDifFactors
+}
+
+

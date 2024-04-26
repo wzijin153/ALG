@@ -1,0 +1,127 @@
+def getFactorData(startDate_in,endDate_in){
+    // 取金额的中间表数据 - 转化为宽表
+    dbName = "dfs://intraday_bar"
+    tbName = "factor_trade_1min"
+    tb_factor_1min_tmp = loadTable(dbName,tbName)
+    tb_factor_pivot_tmp = select FactorValue from tb_factor_1min_tmp 
+    where date(tradetime) >= startDate_in and date(tradetime) <= endDate_in 
+    pivot by securityid, tradetime, FactorName
+    return tb_factor_pivot_tmp
+}
+
+def getPriceData(startDate_in,endDate_in){
+    // 取行情表数据
+    dbName = "dfs://intraday_bar"
+    tbName = "price_01m"
+    tb_price_1min_tmp = loadTable(dbName,tbName)
+    tb_price_tmp = select * from tb_price_1min_tmp 
+    where date(tradetime) >= startDate_in and date(tradetime) <= endDate_in 
+    return tb_price_tmp
+}
+
+
+def getPriceData5min(startDate_in,endDate_in){
+    // 取行情表数据
+    dbName = "dfs://intraday_bar"
+    tbName = "price_05m"
+    tb_price_1min_tmp = loadTable(dbName,tbName)
+    tb_price_tmp = select * from tb_price_1min_tmp 
+    where date(tradetime) >= startDate_in and date(tradetime) <= endDate_in 
+    return tb_price_tmp
+}
+
+def getPriceData15min(startDate_in,endDate_in){
+    // 取行情表数据
+    dbName = "dfs://intraday_bar"
+    tbName = "price_15m"
+    tb_price_1min_tmp = loadTable(dbName,tbName)
+    tb_price_tmp = select * from tb_price_1min_tmp 
+    where date(tradetime) >= startDate_in and date(tradetime) <= endDate_in 
+    return tb_price_tmp
+}
+
+def pdf_gs(X,y){
+    h = 0.025  
+    result = 0
+    for(i in 0:size(X)){
+        result = result + exp(-pow((y-X[i,0])\h,2)\2)\(sqrt(2*pi)*h*size(X))
+    } 
+    return result
+}
+
+def nos_gs(X){
+    a = min(X)
+    b = max(X)
+    result = 0
+    for(i in 0:100){
+        result = result + pow(pdf_gs(X,a+(b-a)*i\100)-exp(-pow(a+(b-a)*i\100,2))\sqrt(2*pi),2)
+    }
+    return result
+}
+
+startDate_in = 2024.01.08
+endDate_in = 2024.01.08
+
+
+/////////////////////////第二类：单表格数据来源，group by，因子包含多步运算///////////////////////////
+tb_price5min = getPriceData5min(startDate_in,endDate_in)
+// 1. gl_alpha0198 // 收益率噪音偏离因子：基于高斯核密度估计分钟收益率偏离正态分布的程度
+pct_chg_data = select securityid, tradetime, pct_chg, avg(pct_chg) as miu, stdp(pct_chg) as sigma from tb_price5min context by securityid, date(tradetime)
+pct_chg_normed = select securityid, tradetime, (pct_chg-miu)\sigma as pct_chg_normed from pct_chg_data 
+
+gl_alpha0198 = select 'gl_alpha0198' as FactorName, nos_gs(pct_chg_normed) as FactorValue from pct_chg_normed group by securityid, date(tradetime) as tradedate
+
+pct_chg_data=NULL;pct_chg_normed=NULL
+
+
+
+/////////////////////////第三类: 多表格数据来源，group by///////////////////////////
+amount_name = 'big'
+beyond_name = '1'
+name_list_in = ('bo_'+amount_name+'_b_sum','bo_'+amount_name+'_s_sum','bo_'+amount_name+'_bs_sum','bo_'+amount_name+'_b_sum_pct','bo_'+amount_name+'_s_sum_pct','bo_'+amount_name+'_bs_sum_pct','bo_'+amount_name+'_b_per_od','bo_'+amount_name+'_s_per_od','bo_'+amount_name+'_bs_per_od','bo_'+amount_name+'_b_per_od_pct','bo_'+amount_name+'_s_per_od_pct','bo_'+amount_name+'_bs_per_od_pct','bo_'+amount_name+'_b_sum_pct1','bo_'+amount_name+'_s_sum_pct1','bo_'+amount_name+'_bs_sum_pct1','bo_'+amount_name+'_b_sum_pct2','bo_'+amount_name+'_s_sum_pct2','bo_'+amount_name+'_bs_sum_pct2','bo_'+amount_name+'_b_ret_corr','bo_'+amount_name+'_s_ret_corr','bo_'+amount_name+'_bs_ret_corr','bo_'+amount_name+'_b_amt_pct_neg','bo_'+amount_name+'_s_amt_pct_neg','bo_'+amount_name+'_bs_amt_pct_neg','bo_'+amount_name+'_b_amt_pct_pos','bo_'+amount_name+'_s_amt_pct_pos','bo_'+amount_name+'_bs_amt_pct_pos')
+factor_list_in = ('touchLimit','beyond_'+beyond_name+'_buy_amount','beyond_'+beyond_name+'_buy_cnt','beyond_'+beyond_name+'_sell_amount','beyond_'+beyond_name+'_sell_cnt','buy_amount','buy_cnt','sell_amount','sell_cnt')
+
+// 取数
+tb_factor_pivot = getFactorData(startDate_in,endDate_in)
+tb_price = getPriceData(startDate_in,endDate_in)
+
+// 把需要计算因子的值都提取出来
+// # 大买单金额（因子值）# 大卖单金额（因子值）# 大买单笔数（因子值）# 大卖单笔数（因子值） //中间表成交表
+// # 买单金额(buy_amount) # 卖单金额 (sell_amount) # 买单笔数(buy_cnt) # 卖单笔数 (sell_cnt) // 中间表成交表
+// # 收益率（pct_chg）# 成交金额（amount）# 成交笔数（orders）// 中间表行情表
+// **************** !!!这里每个成交量都需要重新改!!! ************************（各组因子取列名不一样）
+tb_merge = select securityid,tradetime,
+beyond_1_buy_amount as beyond_buy_amt, beyond_1_buy_cnt as beyond_buy_cnt, 
+beyond_1_sell_amount as beyond_sell_amt, beyond_1_sell_cnt as beyond_sell_cnt,
+buy_amount,buy_cnt,sell_amount,sell_cnt,pct_chg,amount,orders
+from aj(tb_price, tb_factor_pivot, `securityid`tradetime)
+where date(tradetime) >= startDate_in and date(tradetime) <= endDate_in 
+and touchLimit!=1
+// **************** !!!这里每个成交量都需要重新改!!! ************************
+
+// 因子计算
+// f21:大买大卖差额收益相关性 corr(大买单金额 - 大卖单金额， 收益率) 区间相关性 bo_big_bs_ret_corr
+tb_f21_1 = select name_list_in[20] as FactorName, corr(beyond_buy_amt - beyond_sell_amt, pct_chg) as FactorValue from tb_merge group by securityid, date(tradetime) as tradedate
+// f22:下行大买单金额占比 收益率<0 的分钟线中 大买单金额区间求和/成交量区间求和 bo_big_b_amt_pct_neg
+tb_f22_1 = select name_list_in[21] as FactorName, sum(iif(pct_chg<0,beyond_buy_amt,0))/sum(amount) as FactorValue from tb_merge group by securityid, date(tradetime) as tradedate
+
+
+
+/////////////////////////第四类：多表格数据来源，context by，且依赖前面计算的其他因子值///////////////////////////
+tb_factor_pivot = getFactorData(startDate_in,endDate_in)
+tb_price = getPriceData(startDate_in,endDate_in)
+// // 55以后会用到大额的信息
+tb_merge = select securityid,tradetime,
+beyond_5_buy_amount, beyond_7_buy_amount, beyond_7_sell_amount, 
+buy_amount,buy_cnt,sell_amount,sell_cnt,pct_chg,amount,orders
+from aj(tb_price, tb_factor_pivot, `securityid`tradetime)
+where date(tradetime) >= startDate_in and date(tradetime) <= endDate_in 
+and touchLimit!=1
+
+// 因子计算
+// 52. BIG_ORDER_SD0 大单成交金额占比（0倍标准差，买卖有任意一方是大单）绝对值求和/成交金额  beyond_7_buy_amount  beyond_7_sell_amount
+f52 = select 'BIG_ORDER_SD0' as FactorName, sum(abs(beyond_7_buy_amount)+abs(beyond_7_sell_amount))/sum(amount) as FactorValue  from tb_merge group by securityid, date(tradetime) as tradedate
+// 53. B_BIG_ORDER_SD0 大买成交金额占比(0倍标准差) 大买单成交金额占比
+tmp_data = select sum(beyond_7_buy_amount)/sum(amount) as y from tb_merge group by securityid, date(tradetime) as tradedate
+f53 = select securityid,tradedate,'B_BIG_ORDER_SD0' as FactorName, residual(y,FactorValue,ols(y, FactorValue)) AS FactorValue 
+from aj(f52,tmp_data,`securityid`tradedate) context by tradedate

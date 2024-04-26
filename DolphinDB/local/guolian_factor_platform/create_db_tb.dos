@@ -1,0 +1,187 @@
+// 建库
+dbName = 'dfs://intraday_bar_name'
+dbTime = database("", VALUE, 2010.01M..2010.12M)
+dbFactor = database("", HASH, [STRING, 10])
+db = database(directory=dbName, partitionType=COMPO, partitionScheme=[dbTime, dbFactor], engine="TSDB", atomic='TRANS')
+// 建表: factor_trade_1min
+db = database("dfs://intraday_bar_name")
+colName = `securityid`tradetime`FactorName`FactorValue
+colType = [STRING,TIMESTAMP,STRING,DOUBLE]
+tbSchema = table(1:0, colName, colType)
+db.createPartitionedTable(table=tbSchema,tableName=`factor_trade_1min,partitionColumns=`tradetime`securityid,sortColumns=`securityid`FactorName`tradetime,keepDuplicates=LAST)
+// 建表: price_01m
+db = database("dfs://intraday_bar")
+colName = `securityid`tradetime`high`open`low`close`pct_chg`volume`orders`amount`high_limit`low_limit`sec_volume`sec_amount`sec_orders
+colType = [STRING,TIMESTAMP,DOUBLE,DOUBLE,DOUBLE,DOUBLE,DOUBLE,LONG,LONG,DOUBLE,DOUBLE,DOUBLE,LONG,DOUBLE,LONG]
+tbSchema = table(1:0, colName, colType)
+db.createPartitionedTable(table=tbSchema,tableName=`price_01m,partitionColumns=`tradetime`securityid,sortColumns=`securityid`tradetime,keepDuplicates=LAST)
+// 建表: price_05m
+db = database("dfs://intraday_bar")
+colName = `securityid`tradetime`high`open`low`close`pct_chg`volume`orders`amount`high_limit`low_limit`sec_volume`sec_amount`sec_orders
+colType = [STRING,TIMESTAMP,DOUBLE,DOUBLE,DOUBLE,DOUBLE,DOUBLE,LONG,LONG,DOUBLE,DOUBLE,DOUBLE,LONG,DOUBLE,LONG]
+tbSchema = table(1:0, colName, colType)
+db.createPartitionedTable(table=tbSchema,tableName=`price_05m,partitionColumns=`tradetime`securityid,sortColumns=`securityid`tradetime,keepDuplicates=LAST)
+// 建表: price_15m
+db = database("dfs://intraday_bar")
+colName = `securityid`tradetime`high`open`low`close`pct_chg`volume`orders`amount`high_limit`low_limit`sec_volume`sec_amount`sec_orders
+colType = [STRING,TIMESTAMP,DOUBLE,DOUBLE,DOUBLE,DOUBLE,DOUBLE,LONG,LONG,DOUBLE,DOUBLE,DOUBLE,LONG,DOUBLE,LONG]
+tbSchema = table(1:0, colName, colType)
+db.createPartitionedTable(table=tbSchema,tableName=`price_15m,partitionColumns=`tradetime`securityid,sortColumns=`securityid`tradetime,keepDuplicates=LAST)
+
+// 造数据
+res = table(1:0, colName, colType)
+sec = [`000014, `000019, `000048, `000050, `000063, `000070, `000088, `000155, `000510, `000529, `000536, `000539, `000586, `000598, `000619, `000628, `000635, `000636, `000638, `000639, `000672, `000681, `000686, `000688, `000698, `000672, `000716, `000729, `000733, `000738, `000758, `000759, `000758, `000788, `000821, `000826, `000839, `000892, `000910, `000911, `000912, `000951, `000953, `000957, `000962, `000970, `000988, `000990, `001203, `001219, `001230, `001266, `001282, `001311, `001332, `001378, `002008, `002043, `002054, `002055, `002075, `002087, `002098, `002100, `002104, `002130, `002134, `002135, `002153, `002155, `002164, `002167, `002188, `002194, `002195, `002228, `002231, `002248, `002270, `002272, `002291]
+// price_01m
+for (i in sec) {// i = sec[0]
+    n = 120
+    tradetime = 2024.01.08 09:30:00.000 + 1..n * 60000
+    securityid = take(i, n)
+    high = round(5.0 + rand(15.0, n), 2)
+    open = round(5.0 + rand(12.0, n), 2)
+    low = round(5.0 + rand(11.0, n), 2)
+    close = round(5.0 + rand(13.0, n), 2)
+    pct_chg = -0.5 + rand(1.0, n)
+    volume = 100 + rand(3000, n)
+    orders = 5 + rand(300, n)
+    amount = 1000 + rand(20000, n)
+    high_limit = take(12.11, n)
+    low_limit = take(9.91, n)
+    sec_volume = 2000000 + rand(200000, n)
+    sec_amount = round(200000000 + rand(20000000.0, n), 1)
+    sec_orders = 3000 + rand(1000, n)
+    tb = table(securityid, tradetime, high, open, low, close, pct_chg, volume, orders, amount, high_limit, low_limit, sec_volume, sec_amount, sec_orders)
+    res.append!(tb)
+
+    m = 90
+    tradetime = 2024.01.08 13:30:00.000 + 1..m * 60000
+    securityid = take(i, m)
+    high = round(5.0 + rand(15.0, m), 2)
+    open = round(5.0 + rand(12.0, m), 2)
+    low = round(5.0 + rand(11.0, m), 2)
+    close = round(5.0 + rand(13.0, m), 2)
+    pct_chg = -0.5 + rand(1.0, m)
+    volume = 100 + rand(3000, m)
+    orders = 5 + rand(300, m)
+    amount = 1000 + rand(20000, m)
+    high_limit = take(12.11, m)
+    low_limit = take(9.91, m)
+    sec_volume = 2000000 + rand(200000, m)
+    sec_amount = round(200000000 + rand(20000000.0, m), 1)
+    sec_orders = 3000 + rand(1000, m)
+    tb = table(securityid, tradetime, high, open, low, close, pct_chg, volume, orders, amount, high_limit, low_limit, sec_volume, sec_amount, sec_orders)
+    res.append!(tb)
+}
+price_01m = loadTable("dfs://intraday_bar", "price_01m")
+price_01m.append!(res)
+
+// price_05m
+for (i in sec) {// i = sec[0]
+    n = 24
+    tradetime = 2024.01.08 09:30:00.000 + 1..n * 60000 * 5
+    securityid = take(i, n)
+    high = round(5.0 + rand(15.0, n), 2)
+    open = round(5.0 + rand(12.0, n), 2)
+    low = round(5.0 + rand(11.0, n), 2)
+    close = round(5.0 + rand(13.0, n), 2)
+    pct_chg = -0.5 + rand(1.0, n)
+    volume = 100 + rand(3000, n)
+    orders = 5 + rand(300, n)
+    amount = 1000 + rand(20000, n)
+    high_limit = take(12.11, n)
+    low_limit = take(9.91, n)
+    sec_volume = 2000000 + rand(200000, n)
+    sec_amount = round(200000000 + rand(20000000.0, n), 1)
+    sec_orders = 3000 + rand(1000, n)
+    tb = table(securityid, tradetime, high, open, low, close, pct_chg, volume, orders, amount, high_limit, low_limit, sec_volume, sec_amount, sec_orders)
+    res.append!(tb)
+
+    m = 18
+    tradetime = 2024.01.08 13:30:00.000 + 1..m * 60000 * 5
+    securityid = take(i, m)
+    high = round(5.0 + rand(15.0, m), 2)
+    open = round(5.0 + rand(12.0, m), 2)
+    low = round(5.0 + rand(11.0, m), 2)
+    close = round(5.0 + rand(13.0, m), 2)
+    pct_chg = -0.5 + rand(1.0, m)
+    volume = 100 + rand(3000, m)
+    orders = 5 + rand(300, m)
+    amount = 1000 + rand(20000, m)
+    high_limit = take(12.11, m)
+    low_limit = take(9.91, m)
+    sec_volume = 2000000 + rand(200000, m)
+    sec_amount = round(200000000 + rand(20000000.0, m), 1)
+    sec_orders = 3000 + rand(1000, m)
+    tb = table(securityid, tradetime, high, open, low, close, pct_chg, volume, orders, amount, high_limit, low_limit, sec_volume, sec_amount, sec_orders)
+    res.append!(tb)
+}
+price_05m = loadTable("dfs://intraday_bar", "price_05m")
+price_05m.append!(res)
+
+// price_15m
+for (i in sec) {// i = sec[0]
+    n = 8
+    tradetime = 2024.01.08 09:30:00.000 + 1..n * 60000 * 15
+    securityid = take(i, n)
+    high = round(5.0 + rand(15.0, n), 2)
+    open = round(5.0 + rand(12.0, n), 2)
+    low = round(5.0 + rand(11.0, n), 2)
+    close = round(5.0 + rand(13.0, n), 2)
+    pct_chg = -0.5 + rand(1.0, n)
+    volume = 100 + rand(3000, n)
+    orders = 5 + rand(300, n)
+    amount = 1000 + rand(20000, n)
+    high_limit = take(12.11, n)
+    low_limit = take(9.91, n)
+    sec_volume = 2000000 + rand(200000, n)
+    sec_amount = round(200000000 + rand(20000000.0, n), 1)
+    sec_orders = 3000 + rand(1000, n)
+    tb = table(securityid, tradetime, high, open, low, close, pct_chg, volume, orders, amount, high_limit, low_limit, sec_volume, sec_amount, sec_orders)
+    res.append!(tb)
+
+    m = 6
+    tradetime = 2024.01.08 13:30:00.000 + 1..m * 60000 * 15
+    securityid = take(i, m)
+    high = round(5.0 + rand(15.0, m), 2)
+    open = round(5.0 + rand(12.0, m), 2)
+    low = round(5.0 + rand(11.0, m), 2)
+    close = round(5.0 + rand(13.0, m), 2)
+    pct_chg = -0.5 + rand(1.0, m)
+    volume = 100 + rand(3000, m)
+    orders = 5 + rand(300, m)
+    amount = 1000 + rand(20000, m)
+    high_limit = take(12.11, m)
+    low_limit = take(9.91, m)
+    sec_volume = 2000000 + rand(200000, m)
+    sec_amount = round(200000000 + rand(20000000.0, m), 1)
+    sec_orders = 3000 + rand(1000, m)
+    tb = table(securityid, tradetime, high, open, low, close, pct_chg, volume, orders, amount, high_limit, low_limit, sec_volume, sec_amount, sec_orders)
+    res.append!(tb)
+}
+price_15m = loadTable("dfs://intraday_bar", "price_15m")
+price_15m.append!(res)
+
+// factor_trade_1min
+res = table(1:0, colName, colType)
+sec = [`000014, `000019, `000048, `000050, `000063, `000070, `000088, `000155, `000510, `000529, `000536, `000539, `000586, `000598, `000619, `000628, `000635, `000636, `000638, `000639, `000672, `000681, `000686, `000688, `000698, `000672, `000716, `000729, `000733, `000738, `000758, `000759, `000758, `000788, `000821, `000826, `000839, `000892, `000910, `000911, `000912, `000951, `000953, `000957, `000962, `000970, `000988, `000990, `001203, `001219, `001230, `001266, `001282, `001311, `001332, `001378, `002008, `002043, `002054, `002055, `002075, `002087, `002098, `002100, `002104, `002130, `002134, `002135, `002153, `002155, `002164, `002167, `002188, `002194, `002195, `002228, `002231, `002248, `002270, `002272, `002291]
+Factor = [`beyond_1_buy_amount, `beyond_1_buy_cnt, `beyond_1_sell_amount, `beyond_1_sell_cnt, `beyond_3_buy_amount, `beyond_3_buy_cnt, `beyond_3_sell_amount, `beyond_3_sell_cnt, `beyond_5_buy_amount, `beyond_5_buy_cnt, `beyond_5_sell_amount, `beyond_5_sell_cnt, `beyond_7_buy_amount, `beyond_7_buy_cnt, `beyond_7_sell_amount, `beyond_7_sell_cnt, `bid_col_diff, `buy_amount, `buy_cnt, `midprice_avg, `offer_col_diff, `sell_amount, `sell_cnt, `spread_avg, `spread_rate, `touchLimit]
+for (i in sec) {// i = sec[0]
+    n = 120
+    tradetime = 2024.01.08 09:30:00.000 + 1..n * 60000
+    securityid = take(i, n)
+    FactorName = take(`touchLimit, n)
+    FactorValue = rand(2000, n)
+    tb = table(securityid, tradetime, FactorName, FactorValue)
+    res.append!(tb)
+
+    m = 90
+    tradetime = 2024.01.08 13:30:00.000 + 1..m * 60000
+    securityid = take(i, m)
+    FactorName = take(`touchLimit, m)
+    FactorValue = rand(2000, m)
+    tb = table(securityid, tradetime, FactorName, FactorValue)
+    res.append!(tb)
+}
+factor_trade_1min = loadTable("dfs://intraday_bar", "factor_trade_1min")
+factor_trade_1min.append!(res)
+
+undef all

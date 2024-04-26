@@ -1,0 +1,7 @@
+loadPlugin("/hdd/hdd7/zjwang/DolphinDB/server/plugins/mysql/PluginMySQL.txt")
+module mysql
+
+dropDatabase("dfs://xbzg_vds_atp_xh")
+atp_xh_db = database("dfs://xbzg_vds_atp_xh", VALUE, 2020.01M..2030.12M, ,"TSDB")
+mysql::loadEx(connection=conn_atp_xh, dbHandle=atp_xh_db, tableName=`t_account_contract_share, partitionColumns=`update_time, table_or_query=`t_account_contract_share, sortColumns=)
+

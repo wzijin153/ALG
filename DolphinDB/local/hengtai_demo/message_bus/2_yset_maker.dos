@@ -1,0 +1,86 @@
+//module yset_maker
+
+def calcCloseYret(quote_tb, cycle_str){
+	// cycle count by sec, but pass as int
+	yret_tb = select Symbol, Trade_Date, m_time from quote_tb
+	update yret_tb set target_price = quote_tb.LastPrice
+	yret_tb = wj(yret_tb, yret_tb, duration(`0s):duration(cycle_str), <[last(m_time) as 'next_m_time', last(target_price) as 'next_price']>, `Symbol `m_time)
+	update yret_tb set ret = 10000 * log(next_price \ target_price) context by Symbol
+	update yret_tb set ret = ret.nullFill(0)
+	return yret_tb.ret
+}
+
+
+def calcMidYret(quote_tb, cycle_str){
+	// cycle count by sec, but pass as int
+	yret_tb = select Symbol, Trade_Date, m_time from quote_tb
+	update yret_tb set target_price = 0.5 * (quote_tb.BidPrice[0] + quote_tb.AskPrice[0])
+	yret_tb = wj(yret_tb, yret_tb, duration(`0s):duration(cycle_str), <[last(m_time) as 'next_m_time', last(target_price) as 'next_price']>, `Symbol `m_time)
+	update yret_tb set ret = 10000 * log(next_price \ target_price) context by Symbol
+	update yret_tb set ret = ret.nullFill(0)
+	return yret_tb.ret
+}
+
+
+def calcVwaYret(quote_tb, cycle_str){
+	yret_tb = select Symbol, Trade_Date, m_time from quote_tb
+	update yret_tb set target_price = (quote_tb.BidVolume[0] * quote_tb.BidPrice[0] + quote_tb.AskVolume[0] * quote_tb.AskPrice[0]) \ (quote_tb.BidVolume[0] + quote_tb.AskVolume[0])
+	yret_tb = wj(yret_tb, yret_tb, duration(`0s):duration(cycle_str), <[last(m_time) as 'next_m_time', last(target_price) as 'next_price']>, `Symbol `m_time)
+	update yret_tb set ret = 10000 * log(next_price \ target_price) context by Symbol
+	update yret_tb set ret = ret.nullFill(0)
+	return yret_tb.ret
+}
+
+
+def calcYretCycle_atom(quote_tb, task){
+	cycle_str = split_tbcol(task, 'ret', 0, 0, 0)
+	try{
+		if (startsWith(task, 'close_ret'))
+			yret_vc = calcCloseYret(quote_tb, cycle_str)
+		else if (startsWith(task, 'mid_ret'))
+			yret_vc = calcMidYret(quote_tb, cycle_str)
+		else if (startsWith(task, 'vwa_ret'))
+			yret_vc = calcVwaYret(quote_tb, cycle_str)
+		else
+			yret_vc = take(0.0, quote_tb.size())
+	}catch(ex){
+		yret_vc = take(0.0, quote_tb.size())
+	}
+	return yret_vc
+}
+
+
+def calcYretCycle(quote_tb, tasks){
+	yret_tb = select Symbol, Trade_Date, m_time from quote_tb
+	for (i in 0..(size(tasks) - 1)){
+		task = tasks[i]
+		yret_tb[task] = calcYretCycle_atom(quote_tb, task)
+	}
+	return yret_tb
+}
+
+
+def calcYretCycle_parallel(quote_tb, tasks){
+	yret_vcs = ploop(calcYretCycle_atom{quote_tb, }, tasks)
+	yret_tb = select Symbol, Trade_Date, m_time from quote_tb
+	for (i in 0..(size(tasks) - 1)){
+		task = tasks[i]
+		yret_tb[task] = yret_vcs[i]
+	}
+	return yret_tb
+}
+
+
+def reshpDayYretCycle(yret_tb, ruler_tb){
+	tm_min = min(ruler_tb[`k_time])
+	tm_max = max(ruler_tb[`k_time])
+	yret_tb2 = fj(yret_tb, ruler_tb, `m_time, `k_time)
+	update yret_tb2 set m_time = m_time.nullFill(k_time)
+	yret_tb2 = select * from yret_tb2 order by m_time
+	dropColumns!(yret_tb2, `k_time)
+	for (col in yret_tb2.columnNames()){
+		yret_tb2[col] = yret_tb2[col].ffill().bfill()
+	}
+	yret_tb2 = select * from yret_tb2 where m_time >= tm_min and m_time <= tm_max
+	return yret_tb2
+}

@@ -1,0 +1,387 @@
+module DolphinDBModules::easyTLDataImport::loadTLDatasnapshotVector
+
+/**
+DolphinDB实现通联数据自动化导入
+DolphinDB server version: 2.00.9.4 及以上版本
+Last modification time: 2023.12.28
+*/
+
+
+use DolphinDBModules::easyTLDataImport::createDB
+use DolphinDBModules::easyTLDataImport::createTBsnapshotVector
+use DolphinDBModules::easyTLDataImport::tbSchema::snapshotVectorSchema
+use DolphinDBModules::easyTLDataImport::tbSchema::entrustSchema
+use DolphinDBModules::easyTLDataImport::tbSchema::tradeSchema
+use DolphinDBModules::easyTLDataImport::loadOneDayData::loadOneDaySnapshotVector
+use DolphinDBModules::easyTLDataImport::loadOneDayData::loadOneDayEntrust
+use DolphinDBModules::easyTLDataImport::loadOneDayData::loadOneDayTrade
+use DolphinDBModules::easyTLDataImport::loadOneDayData::loadOneDayTradeEntrust
+
+// 获取 fileDir 文件夹下所有 regex文件的路径
+def myFiles(fileDir, regex){
+	if(endsWith(fileDir, "/")) 	filedir = fileDir
+	else 				filedir = fileDir + "/"
+	res = filedir + exec filename from files(filedir) where regexFind(filename, regex) != -1
+	folderFiles = exec filename from files(filedir) where isDir=true
+	if(size(folderFiles)==0) return res
+	
+	for(folder in folderFiles){
+		res = res join myFiles(filedir + folder, regex)
+	}
+	return res
+}
+
+// 获取 fileDir 下 [startDate, endDate] 范围内的日期文件夹
+def getFileDate(fileDir, startDate=NULL, endDate=NULL){
+	try{
+		if(endsWith(fileDir, "/")) 	filedir = fileDir
+		else 				filedir = fileDir + "/"
+		fileDirs = myFiles(filedir, "[0-9]{8}$")
+	}catch(ex){
+		errorMessage = dict(`message`code, [string(ex[0])+":"+string(ex[1]), "error"])
+		writeLog(toStdJson(errorMessage))
+		print(toStdJson(errorMessage))
+		return false
+	}
+
+	if(count(fileDirs) == 0){
+		errorMessage = dict(`message`code, ["[" + fileDir + "] 路径下没有找到指定日期的文件夹，请确认文件路径", "warning"])
+		writeLog(toStdJson(errorMessage))
+		print(toStdJson(errorMessage))
+		return false
+	}
+	fileDirs = fileDirs[regexFind(each(x->last(split(x, "/")), fileDirs), "[0-9]{8}$")==0]
+	if(count(fileDirs) == 0){
+		errorMessage = dict(`message`code, ["[" + fileDir + "] 路径下没有找到指定日期的文件夹，请确认文件路径", "warning"])
+		writeLog(toStdJson(errorMessage))
+		print(toStdJson(errorMessage))
+		return false
+	}
+		
+	if(startDate != NULL){
+		if(typestr(startDate)=="STRING"){
+			if(regexFind(startDate, "[0-9]{8}$")==0){
+				fileDirs = fileDirs[each(def(path, file){return last(split(path, "/")) >= file}, fileDirs, startDate)]	
+			}else{
+				errorMessage = dict(`message`code, ["开始日期 [" + startDate + "] 格式有误", "error"])
+				writeLog(toStdJson(errorMessage))
+				print(toStdJson(errorMessage))
+				return false
+			}
+		}else{
+			errorMessage = dict(`message`code, ["开始日期 [" + startDate + "] 格式有误", "error"])
+			writeLog(toStdJson(errorMessage))
+			print(toStdJson(errorMessage))
+			return false
+		}
+	}
+	if(endDate != NULL)	{
+		if(typestr(endDate)=="STRING"){
+			if(regexFind(endDate, "[0-9]{8}$")==0){
+				fileDirs = fileDirs[each(def(path, file){return last(split(path, "/")) <= file}, fileDirs, endDate)]	
+			}else{
+				errorMessage = dict(`message`code, ["结束日期 [" + endDate + "] 格式有误", "error"])
+				writeLog(toStdJson(errorMessage))
+				print(toStdJson(errorMessage))
+				return false
+			}
+		}else{
+			errorMessage = dict(`message`code, ["结束日期 [" + endDate + "] 格式有误", "error"])
+			writeLog(toStdJson(errorMessage))
+			print(toStdJson(errorMessage))
+			return false		
+		}
+	}
+
+	if(count(fileDirs) == 0){
+		errorMessage = dict(`message`code, ["[" + fileDir + "] 路径下没有找到指定日期的文件夹，请确认文件路径", "warning"])
+		writeLog(toStdJson(errorMessage))
+		print(toStdJson(errorMessage))
+		return false
+	}
+	return fileDirs
+}
+
+/**
+ * 导入 2023.12.01 之前的数据
+ */
+// 把 file文件夹下的快照数据导入 dbName 数据库的 tbName 表
+// file是形如 ".../20211201" 的绝对路径字符串的标量或者向量，是包含某日且仅包含一天数据的目录
+def loadDaysDataV1(fileList, dbName, tbName, dataType, market="ALL"){
+	for(file in fileList){	//file=fileList[0]
+		day = temporalParse(lastNot(split(file, "/")),"yyyyMMdd")
+		print("Start load the data in path [" + file + "]")
+		writeLog("Start load the data in path [" + file + "]")
+		if(day < 2016.05.07){
+			csvFilesSZ = myFiles(file, "SZ$")[0]	// 2016.05.06 以前沪深的 csv 名字相同，所以需要再使用上层目录区分
+			csvFilesSH = myFiles(file, "SH$")[0]
+		}
+		else 	csvFilesSZ, csvFilesSH = file, file
+		csvFilesSZ, csvFilesSH = myFiles(csvFilesSZ, "csv$"), myFiles(csvFilesSH, "csv$")
+		
+		if(dataType=="Snapshot")		funcSZ, funcSH = loadOneDaySnapshotSZ, loadOneDaySnapshotSH
+		else if(dataType=="Entrust")	funcSZ, funcSH = loadOneDayEntrustSZ, loadOneDayEntrustSH
+		else if(dataType=="Trade")		funcSZ, funcSH = loadOneDayTradeSZ, loadOneDayTradeSH
+		
+		if(market=="ALL"){
+			tbNameSZ, tbNameSH = tbName, tbName
+			try{
+				funcSZ(csvFilesSZ, day, dbName, tbNameSZ, true)
+				funcSH(csvFilesSH, day, dbName, tbNameSH, true)
+			}
+			catch(ex){
+				errorMessage = dict(`message`code, [string(ex[0])+":"+string(ex[1]), "error"])
+				writeLog(toStdJson(errorMessage))	
+				print(toStdJson(errorMessage))
+			}
+		}else if(market == "SZ"){
+			tbNameSZ = tbName + "SZ"
+			try{
+				funcSZ(csvFilesSZ, day, dbName, tbNameSZ, false)
+			}
+			catch(ex){
+				errorMessage = dict(`message`code, [string(ex[0])+":"+string(ex[1]), "error"])
+				writeLog(toStdJson(errorMessage))	
+				print(toStdJson(errorMessage))
+			}
+		}else if(market == "SH"){
+			tbNameSH = tbName + "SH"
+			try{
+				funcSH(csvFilesSH, day, dbName, tbNameSH, false)
+			}
+			catch(ex){
+				errorMessage = dict(`message`code, [string(ex[0])+":"+string(ex[1]), "error"])
+				writeLog(toStdJson(errorMessage))	
+				print(toStdJson(errorMessage))
+			}
+		}
+	}
+}
+
+// 导入某个路径 filedir 下的所有数据
+// merge=true，沪深数据合并存储；merge=false，沪深数据分开存储
+def autoLoadTongLianDataV1(fileDirs, dataSource, dbName, tableName, market="ALL", merge=true, parallel=1, initialDB=false, initialTB=false){
+	dataType = dataSource[2:]
+	tbName = iif(tableName==NULL, lower(dataSource[2:]), tableName)
+	// 尝试创建库表
+	writeLog("Start creating the table [" + tbName + "] in the database [" + dbName + "].")
+	print("Start creating the table [" + tbName + "] in the database [" + dbName + "].")
+	try{
+		createTB(dbName, tbName, dataType, initialTB=initialTB, initialDB=initialDB, market=market)
+	}catch(ex){
+		errorMessage = dict(`message`code, [string(ex[0])+":"+string(ex[1]), "error"])
+		writeLog(toStdJson(errorMessage))
+		print(toStdJson(errorMessage))
+		return false
+	}
+	// 检查库表结构
+	if(market=="ALL"){
+		if(dataSource=="TLSnapshot")	schemaTB1 = snapshotSchemaTb().schema().colDefs
+		else if(dataSource=="TLEntrust")	schemaTB1 = entrustSchemaTb().schema().colDefs
+		else if(dataSource=="TLTrade")	schemaTB1 = tradeSchemaTb().schema().colDefs
+	}else if(market=="SH"){
+		if(dataSource=="TLSnapshot")	schemaTB1 = snapshotSchemaTbSH().schema().colDefs
+		else if(dataSource=="TLEntrust")	schemaTB1 = entrustSchemaTbSH().schema().colDefs
+		else if(dataSource=="TLTrade")	schemaTB1 = tradeSchemaTbSH().schema().colDefs	
+	}else{
+		if(dataSource=="TLSnapshot")	schemaTB1 = snapshotSchemaTbSZ().schema().colDefs
+		else if(dataSource=="TLEntrust")	schemaTB1 = entrustSchemaTbSZ().schema().colDefs
+		else if(dataSource=="TLTrade")	schemaTB1 = tradeSchemaTbSZ().schema().colDefs		
+	}
+//	schemaTB1 = funcByName("DolphinDBModules::easyTLDataImport::tbSchema::"+lower(dataSource[2:])+"Schema::"+lower(dataSource[2:])+"SchemaTb"+iif(market=="ALL", "", market))().schema().colDefs
+	schemaTB2 = loadTable(dbName, tbName+iif(market=="ALL", "", market)).schema().colDefs
+	if(eqObj(schemaTB1.values()[0:2], schemaTB2.values()[0:2])==false){
+		errorMessage = dict(`message`code, ["分布式表 [" + dbName + ", " + tbName + "] 的表结构和 tbSchema 里指定表结构不一致，考虑设置 initialTB=true", "error"])
+		writeLog(toStdJson(errorMessage))
+		print(toStdJson(errorMessage))
+		return false
+	}
+	// 将符合导入条件的日期的数据，在原来的数据库内删除（防止重复导入）
+	if(merge == true)	exist_date = (select count(*) from loadTable(dbName, tbName) group by date(TradeTime)).date_TradeTime
+	else			exist_date = (select count(*) from loadTable(dbName, tbName+market) group by date(TradeTime)).date_TradeTime
+	load_date = temporalParse(each(last, split(fileDirs, "/")), "yyyyMMdd")
+	target_date = load_date[load_date in exist_date]
+	if(size(target_date) > 0){
+		writeLog("Delete duplicate data in the database.")
+		print("Delete duplicate data in the database.")
+		if(merge == true)	dropPartition(database(dbName), target_date, tableName=tbName)
+		else			dropPartition(database(dbName), target_date, tableName=tbName+market)
+	}
+
+	// 根据并行度拆分任务
+	myCut = def(i, parallel, dirs){return dirs[rowNo(dirs)%parallel==i]}
+	fileLists = loop(myCut{,parallel, fileDirs}, 0..(parallel-1))
+	// 导入数据
+	writeLog("Start loading the TongLian data.")
+	print("Start loading the TongLian data.")
+	jobid = rand(uuid(), 1)[0]
+	for(fileList in fileLists){//fileList=fileLists[0]
+		submitJob("TongLian"+dataType+market, string(jobid), loadDaysDataV1{fileList, dbName, tbName, dataType, market})
+	}
+	return jobid
+}
+
+/**
+ * 导入 2023.12.04 之后的逐笔的数据，一个csv导入逐笔成交和逐笔委托两个库
+ */
+def loadDaysDataV2(fileList, dbNames, tbNames, market="ALL"){
+	for(file in fileList){	//file="/ssd/ssd3/data/csvData/20231127", file=fileList[0]
+		day = temporalParse(lastNot(split(file, "/")),"yyyyMMdd")
+		print("Start load the data in path [" + file + "]")
+		writeLog("Start load the data in path [" + file + "]")
+		csvFiles = myFiles(file, "csv$")
+		
+		if(market=="ALL"){
+			try{
+				// 上交所导入
+				loadOneDayTradeEntrustSH(csvFiles, day, dbNames, tbNames, true)
+				// 深交所导入
+				loadOneDayTradeSZ(csvFiles, day, dbNames[0], tbNames[0], true)
+				loadOneDayEntrustSZ(csvFiles, day, dbNames[1], tbNames[1], true)
+			}
+			catch(ex){
+				errorMessage = dict(`message`code, [string(ex[0])+":"+string(ex[1]), "error"])
+				writeLog(toStdJson(errorMessage))	
+				print(toStdJson(errorMessage))
+			}
+		}else if(market == "SZ"){
+			try{
+				// 深交所导入
+				loadOneDayTradeSZ(csvFiles, day, dbNames[0], tbNames[0]+"SZ", false)
+				loadOneDayEntrustSZ(csvFiles, day, dbNames[1], tbNames[1]+"SZ", false)
+			}
+			catch(ex){
+				errorMessage = dict(`message`code, [string(ex[0])+":"+string(ex[1]), "error"])
+				writeLog(toStdJson(errorMessage))	
+				print(toStdJson(errorMessage))
+			}
+		}else if(market == "SH"){
+			try{
+				// 上交所导入
+				loadOneDayTradeEntrustSH(csvFiles, day, dbNames, tbNames+"SH", false)
+			}
+			catch(ex){
+				errorMessage = dict(`message`code, [string(ex[0])+":"+string(ex[1]), "error"])
+				writeLog(toStdJson(errorMessage))	
+				print(toStdJson(errorMessage))
+			}
+		}
+	}
+}
+
+def autoLoadTongLianDataV2(fileDirs, databasebName, tableName, market="ALL", merge=true, parallel=1, initialDB=false, initialTB=false){
+	dataTypes = ["Trade", "Entrust"]
+	dbNames = iif(size(databasebName)==1, take(databasebName, 2), databasebName)
+	tbNames = iif(tableName==NULL, ["trade", "entrust"], tableName)
+	// 尝试创建库表
+	for(i in 0:size(dbNames)){
+		dbName, tbName, dataType = dbNames[i], tbNames[i], dataTypes[i]
+		writeLog("Start creating the table [" + tbName + "] in the database [" + dbName + "].")
+		print("Start creating the table [" + tbName + "] in the database [" + dbName + "].")
+		try{
+			createTB(dbName, tbName, dataType, initialTB=initialTB, initialDB=initialDB, market=market)
+		}catch(ex){
+			errorMessage = dict(`message`code, [string(ex[0])+":"+string(ex[1]), "error"])
+			writeLog(toStdJson(errorMessage))
+			print(toStdJson(errorMessage))
+			return false
+		}
+		// 检查库表结构
+		tbName = tbName + iif(market=="ALL", "", market)
+		if(market=="ALL"){
+			if(dataType=="Snapshot")	schemaTB1 = snapshotSchemaTb().schema().colDefs
+			else if(dataType=="Entrust")	schemaTB1 = entrustSchemaTb().schema().colDefs
+			else if(dataType=="Trade")	schemaTB1 = tradeSchemaTb().schema().colDefs
+		}else if(market=="SH"){
+			if(dataType=="Snapshot")	schemaTB1 = snapshotSchemaTbSH().schema().colDefs
+			else if(dataType=="Entrust")	schemaTB1 = entrustSchemaTbSH().schema().colDefs
+			else if(dataType=="Trade")	schemaTB1 = tradeSchemaTbSH().schema().colDefs	
+		}else{
+			if(dataType=="Snapshot")	schemaTB1 = snapshotSchemaTbSZ().schema().colDefs
+			else if(dataType=="Entrust")	schemaTB1 = entrustSchemaTbSZ().schema().colDefs
+			else if(dataType=="Trade")	schemaTB1 = tradeSchemaTbSZ().schema().colDefs		
+		}
+//		schemaTB1 = funcByName("DolphinDBModules::easyTLDataImport::tbSchema::"+lower(dataType)+"Schema::"+lower(dataType)+"SchemaTb"+iif(market=="ALL", "", market))().schema().colDefs
+		schemaTB2 = loadTable(dbName, tbName).schema().colDefs
+		if(eqObj(schemaTB1.values()[0:2], schemaTB2.values()[0:2])==false){
+			errorMessage = dict(`message`code, ["分布式表 [" + dbName + ", " + tbName + "] 的表结构和 tbSchema 里指定表结构不一致，考虑设置 initialTB=true", "error"])
+			writeLog(toStdJson(errorMessage))
+			print(toStdJson(errorMessage))
+			return false
+		}
+		// 将符合导入条件的日期的数据，在原来的数据库内删除（防止重复导入）
+		exist_date = (select count(*) from loadTable(dbName, tbName) group by date(TradeTime)).date_TradeTime
+		load_date = temporalParse(each(last, split(fileDirs, "/")), "yyyyMMdd")
+		target_date = load_date[load_date in exist_date]
+		if(size(target_date) > 0){
+			writeLog("Delete duplicate data in the database.")
+			print("Delete duplicate data in the database.")
+			if(merge == true)	dropPartition(database(dbName), target_date, tableName=tbName)
+			else			dropPartition(database(dbName), target_date, tableName=tbName+market)
+		}
+	}
+	// 根据并行度拆分任务
+	myCut = def(i, parallel, dirs){return dirs[rowNo(dirs)%parallel==i]}
+	fileLists = loop(myCut{,parallel, fileDirs}, 0..(parallel-1))
+	// 导入数据
+	writeLog("Start loading the TongLian data.")
+	print("Start loading the TongLian data.")
+	jobid = rand(uuid(), 1)[0]
+	for(fileList in fileLists){//fileList=fileLists[0]
+		submitJob("TongLian"+dataType+market, string(jobid), loadDaysDataV2{fileList, dbNames, tbNames, market})
+	}
+	return jobid
+}
+
+/**
+ * 导入通联数据
+ */
+def autoLoadTongLianData(fileDir, dataSource, dbName="dfs://TL_Level2", tableName=NULL, market="ALL", startDate=NULL, endDate=NULL, parallel=1, initialDB=false, initialTB=false){
+	// 判断 market 参数是否合规
+	if(market == "ALL")		merge = true
+	else if(market == "SZ")	merge = false
+	else if(market == "SH")	merge = false
+	else{
+		errorMessage = dict(`message`code, ["市场 [" + market + "] 暂时不支持", "error"])
+		writeLog(toStdJson(errorMessage))
+		print(toStdJson(errorMessage))
+		return false
+	}
+	// 判断 dataSource 参数是否符合类型
+	if(typestr(dataSource) != "STRING"){
+		errorMessage = dict(`message`code, ["数据源 [" + dataSource + "] 暂时不支持", "error"])
+		writeLog(toStdJson(errorMessage))
+		print(toStdJson(errorMessage))
+		return false
+	}
+	// 获取所有日期
+	fileDirs = getFileDate(fileDir, startDate, endDate)
+	if(typestr(fileDirs)=="BOOL"){
+		return false
+	}
+	
+	if(dataSource in ["TLSnapshot", "TLEntrust", "TLTrade"]){
+		jobid = autoLoadTongLianDataV1(fileDirs, dataSource, dbName, tableName, market, merge, parallel, initialDB, initialTB)
+	}else if(dataSource=="TLTradeEntrust"){
+		jobid = autoLoadTongLianDataV2(fileDirs, dbName, tableName, market, merge, parallel, initialDB, initialTB)
+	}else{
+		errorMessage = dict(`message`code, ["数据源 [" + dataSource + "] 暂时不支持", "error"])
+		writeLog(toStdJson(errorMessage))
+		print(toStdJson(errorMessage))
+		return false
+	}
+	return jobid
+}
+
+def getJobStatus(jobid){
+	temp = string(jobid)
+	return select * from getRecentJobs() where jobDesc=temp
+}
+
+
+def getJobDetails(jobid){
+	jobStatus = getJobStatus(jobid)
+	jobMessage = each(getJobMessage, jobStatus.jobId)
+	jobMessage = concat(jobMessage, "\n////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\n")
+	return jobMessage
+}

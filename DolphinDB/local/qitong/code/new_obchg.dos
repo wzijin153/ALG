@@ -1,0 +1,347 @@
+//obchg
+
+/*
+ * @description: 
+ * @param now_buy_price: 十档买价
+ * @param now_buy_qty: 十档买量
+ * @param last_ob_pos: 上一时点价格档位
+ * @param now_ob_pos: 当前时点的价格档位
+ * @param buy_cg: 各档位累计 buy_cg
+ * @return {*}
+ */
+defg calc_obchg_buy_price(now_buy_price, now_buy_qty, last_ob_pos, now_ob_pos, buy_cg){
+	is_break = false
+	if (last_ob_pos.size() == 0){
+		ob_pos = last_ob_pos
+		if (last_ob_pos >= 9){
+			return string(buy_cg) + '_' + string(last_ob_pos) + '_' + is_break
+		}
+	}
+	else {
+		ob_pos = last_ob_pos[1]
+		if (last_ob_pos[1] >= 9){
+			return string(buy_cg) + '_' + string(last_ob_pos[1]) + '_' + is_break
+		}
+	}
+	if(buy_cg.size() == 0) {
+		total = buy_cg
+	}
+	else {
+		total=buy_cg[1]
+	}
+	
+	for(old_ob_index in ob_pos..9){
+		if (eqFloat(now_buy_price[now_ob_pos][1], now_buy_price[old_ob_index][0])){
+			total += now_buy_qty[now_ob_pos][1] - now_buy_qty[old_ob_index][0]
+			old_ob_index += 1
+			is_break = true	
+			break		
+		}
+		else if(now_buy_price[now_ob_pos][1] > now_buy_price[old_ob_index][0]){
+			total += now_buy_qty[now_ob_pos][1]
+			is_break = true
+			break
+		}
+		else{
+			total -= now_buy_qty[old_ob_index][0]
+		}
+	}
+	return string(last(total)) + '_' + string(last(old_ob_index)) + '_' + is_break
+}
+
+/*
+ * @description: 
+ * @param now_sell_price: 十档卖价
+ * @param now_sell_qty: 十档卖量
+ * @param last_ob_pos: 上一时点价格档位
+ * @param now_ob_pos: 当前时点的价格档位
+ * @param sell_cg: 各档位累计 sell_cg
+ * @return {*}
+ */
+defg calc_obchg_sell_price(now_sell_price, now_sell_qty, last_ob_pos, now_ob_pos, sell_cg){
+	is_break = false
+	if (last_ob_pos.size() == 0){
+		ob_pos = last_ob_pos
+		if (last_ob_pos >= 9){
+			return string(sell_cg) + '_' + string(last_ob_pos) + '_' + is_break
+		}
+	}
+	else {
+		ob_pos = last_ob_pos[1]
+		if (last_ob_pos[1] >= 9){
+			return string(sell_cg) + '_' + string(last_ob_pos[1]) + '_' + is_break
+		}
+	}
+	if(sell_cg.size() == 0) {
+		total = sell_cg
+	}
+	else {
+		total = sell_cg[1]
+	}
+	
+	for(old_ob_index in ob_pos..9){
+		if (eqFloat( now_sell_price[now_ob_pos][1], now_sell_price[old_ob_index][0])){
+			total +=  now_sell_qty[now_ob_pos][1] - now_sell_qty[old_ob_index][0]
+			old_ob_index += 1
+			is_break = true	
+			break		
+		}
+		else if(now_sell_price[now_ob_pos][1] < now_sell_price[old_ob_index][0]){
+			total += now_sell_qty[now_ob_pos][1]
+			is_break = true
+			break
+		}
+		else{
+			total -= now_sell_qty[old_ob_index][0]
+		}
+	}
+	return string(last(total)) + '_' + string(last(old_ob_index)) + '_' + is_break
+}
+
+// 计算 obchg 因子
+def calc_obchg(OBData, symbol, calDate, level){
+	// OBData = t1
+	// symbol = sym
+	// calDate = i
+	// level = 10
+
+	/*
+	 * OBData ob数据
+	 * ticker 股票代码
+	 * calDate 计算日期
+	 * level 价格档位 1..10
+	 */
+	// 将 bid, bidqty, ask, askqty 分别拼接为一个数组向量
+	// limit_flag: 涨跌停标志, 1: 涨停, -1: 跌停
+	tmp = select data_time, ticker, iif((bid1 != 0 and ask1 != 0), 0, iif(bid1==0, -1, 1)) as limit_flag, fixedLengthArrayVector(bid1, bid2, bid3, bid4, bid5, bid6, bid7, bid8, bid9, bid10) as bid, fixedLengthArrayVector(bidqty1, bidqty2, bidqty3, bidqty4, bidqty5, bidqty6, bidqty7, bidqty8, bidqty9, bidqty10) as bidqty, fixedLengthArrayVector(ask1, ask2, ask3, ask4, ask5, ask6, ask7, ask8, ask9, ask10) as ask, fixedLengthArrayVector(askqty1, askqty2, askqty3, askqty4, askqty5, askqty6, askqty7, askqty8, askqty9, askqty10) as askqty from OBData where ticker = symbol and date(data_time) = calDate
+	// 将 limit_flag 连续的相同元素划分为一组
+	tmp = select *, segment(limit_flag, false) as limit_seg from tmp
+	res = select data_time, ticker, limit_seg from tmp
+	// 
+	for(now_ob_pos in 0..(level - 1)){// now_ob_pos = (0..(level - 1))[1]
+		if(now_ob_pos == 0){
+			tmp = select data_time, ticker, limit_seg, bid, bidqty, ask, askqty, moving(calc_obchg_buy_price{ , , 0, 0, 0}, [bid, bidqty], 2) as "total_buy", moving(calc_obchg_sell_price{ , , 0, 0, 0}, [ask, askqty], 2) as "total_sell" from tmp context by limit_seg
+			tmp = select data_time, ticker, limit_seg, bid, bidqty, ask, askqty, int(substr(total_buy, 0, strlen(total_buy) - 4)) as buy_cg, int(substr(total_buy, strlen(total_buy) - 3, strlen(total_buy) - 2 )) as buy_old_index, int(substr(total_buy, strlen(total_buy) - 1)) as buy_is_break, int(substr(total_sell, 0, strlen(total_sell) - 4)) as sell_cg, int(substr(total_sell, strlen(total_sell) - 3, strlen(total_sell) - 2)) as sell_old_index, int(substr(total_sell, strlen(total_sell) - 1)) as sell_is_break from tmp
+			sqlUpdate(table=res, updates=(sqlColAlias(<buy_cg>, "buy_0"), sqlColAlias(<sell_cg>, "sell_0")), from=<tmp>).eval()
+		}
+		else{
+			tmp = select data_time, ticker, limit_seg, bid, bidqty, ask, askqty, moving(calc_obchg_buy_price{ , , , now_ob_pos, 0}, [bid, bidqty, buy_old_index], 2) as "total_buy", moving(calc_obchg_sell_price{ , , , now_ob_pos, 0}, [ask, askqty, sell_old_index], 2) as "total_sell" from tmp context by limit_seg
+			tmp = select data_time, ticker, limit_seg, bid, bidqty, ask, askqty, int(substr(total_buy, 0, strlen(total_buy) - 4)) as buy_cg, int(substr(total_buy, strlen(total_buy) - 3, strlen(total_buy) - 2 )) as buy_old_index, int(substr(total_buy, strlen(total_buy) - 1)) as buy_is_break, int(substr(total_sell, 0, strlen(total_sell) - 4)) as sell_cg, int(substr(total_sell, strlen(total_sell) - 3, strlen(total_sell) - 2)) as sell_old_index, int(substr(total_sell, strlen(total_sell) - 1)) as sell_is_break from tmp
+			if (now_ob_pos == level - 1){
+				update tmp set buy_cg = bidqty[0 : level].sum(), buy_old_index = level, buy_is_break = 1 where buy_cg = NULL
+				update tmp set sell_cg = askqty[0 : level].sum(), sell_old_index = level, sell_is_break = 1 where sell_cg = NULL
+			}
+			sqlUpdate(table=res, updates=(sqlColAlias(<buy_cg>, "buy_" + string(now_ob_pos)), sqlColAlias(<sell_cg>, "sell_" + string(now_ob_pos))), from=<tmp>).eval()
+		}
+	}
+	res = select data_time, ticker, limit_seg, (buy_0 + buy_1 * 0.9 + buy_2 * 0.8 + buy_3 * 0.7 + buy_4 * 0.6 + buy_5 * 0.5 + buy_6 * 0.4 + buy_7 * 0.3 + buy_8 * 0.2 + buy_9 * 0.1) as buy_cg, (sell_0 + sell_1 * 0.9 + sell_2 * 0.8 + sell_3 * 0.7 + sell_4 * 0.6 + sell_5 * 0.5 + sell_6 * 0.4 + sell_7 * 0.3 + sell_8 * 0.2 + sell_9 * 0.1) as sell_cg, buy_0, buy_1, buy_2, buy_3, buy_4, sell_0, sell_1, sell_2, sell_3, sell_4 from res
+	res = select data_time, ticker, limit_seg, buy_cg, sell_cg, (buy_cg - sell_cg) as obchg, buy_0, buy_1, buy_2, buy_3, buy_4, sell_0, sell_1, sell_2, sell_3, sell_4 from res
+	return res
+}
+
+/**
+ * @description: 用于补齐 OBdata 中有缺失交易时间段的交易数据
+ */
+def prepareOBData_cal(caldate, symbol, OBData, t){// caldate = i
+	// 计算每100ms的平均值
+	tmp = select ticker, data_time, avg(ask10) as ask10, avg(ask9) as ask9, avg(ask8) as ask8, avg(ask7) as ask7, avg(ask6) as ask6, avg(ask5) as ask5, avg(ask4) as ask4, avg(ask3) as ask3, avg(ask2) as ask2, avg(ask1) as ask1, avg(bid10) as bid10, avg(bid9) as bid9, avg(bid8) as bid8, avg(bid7) as bid7, avg(bid6) as bid6, avg(bid5) as bid5, avg(bid4) as bid4, avg(bid3) as bid3, avg(bid2) as bid2, avg(bid1) as bid1, avg(askqty10) as askqty10, avg(askqty9) as askqty9, avg(askqty8) as askqty8, avg(askqty7) as askqty7, avg(askqty6) as askqty6, avg(askqty5) as askqty5, avg(askqty4) as askqty4, avg(askqty3) as askqty3, avg(askqty2) as askqty2, avg(askqty1) as askqty1, avg(bidqty10) as bidqty10, avg(bidqty9) as bidqty9, avg(bidqty8) as bidqty8, avg(bidqty7) as bidqty7, avg(bidqty6) as bidqty6, avg(bidqty5) as bidqty5, avg(bidqty4) as bidqty4, avg(bidqty3) as bidqty3, avg(bidqty2) as bidqty2, avg(bidqty1) as bidqty1 from OBData where date(data_time) = caldate and ticker in symbol group by ticker, interval(data_time, t, 'none') as data_time
+	// 计算每100ms的最后产生的价格
+	tmp1 = select ticker, data_time, last(ask10) as ask10, last(ask9) as ask9, last(ask8) as ask8, last(ask7) as ask7, last(ask6) as ask6, last(ask5) as ask5, last(ask4) as ask4, last(ask3) as ask3, last(ask2) as ask2, last(ask1) as ask1, last(bid10) as bid10, last(bid9) as bid9, last(bid8) as bid8, last(bid7) as bid7, last(bid6) as bid6, last(bid5) as bid5, last(bid4) as bid4, last(bid3) as bid3, last(bid2) as bid2, last(bid1) as bid1, last(askqty10) as askqty10, last(askqty9) as askqty9, last(askqty8) as askqty8, last(askqty7) as askqty7, last(askqty6) as askqty6, last(askqty5) as askqty5, last(askqty4) as askqty4, last(askqty3) as askqty3, last(askqty2) as askqty2, last(askqty1) as askqty1, last(bidqty10) as bidqty10, last(bidqty9) as bidqty9, last(bidqty8) as bidqty8, last(bidqty7) as bidqty7, last(bidqty6) as bidqty6, last(bidqty5) as bidqty5, last(bidqty4) as bidqty4, last(bidqty3) as bidqty3, last(bidqty2) as bidqty2, last(bidqty1) as bidqty1 from OBData where date(data_time) = caldate and ticker in symbol group by ticker, interval(data_time, t, 'prev') as data_time
+	if(tmp.size() == 0) {
+		return tmp
+	}
+	ticker = symbol
+	// 对齐时间窗口, 除完以后就是半天交易时段数据的条数
+	n = 7200000 / t
+	// 构造完整连续的时间序列
+	timeSeries = 09:30:00.000 + 0..(n - 1) * t
+	timeSeries.append!(13:00:00.000 + 0..(n - 1) * t)
+	// 格式化为 timestamp 类型(原表类型为 timestamp)
+	timeSeries = timestamp(take(string(caldate[0]) + 'T', n * 2) + string(timeSeries))
+	// 构造前两列 ticker, data_time
+	demo = table(take(take(ticker, timeSeries.size()), symbol.size() * timeSeries.size()).sort() as ticker, take(timeSeries, symbol.size() * timeSeries.size()) as data_time)
+	res = lj(demo, tmp, `ticker`data_time)
+	// 取出缺失交易的时间段
+	nulltime = select ticker, data_time from res where ask10 = NULL and ((time(data_time) < 11:30:00.000) or (time(data_time) >=13:00:00.000))
+	if (nulltime.size() > 0){
+		// 缺失交易的时间段的交易用每100ms最后产生的价格来补齐
+		res1 = lj(nulltime, tmp1, `ticker`data_time)
+		res = select ticker, data_time, ask10, ask9, ask8, ask7, ask6, ask5, ask4, ask3, ask2, ask1, bid10, bid9, bid8, bid7,bid6, bid5, bid4, bid3, bid2, bid1, askqty10, askqty9, askqty8, askqty7,askqty6, askqty5, askqty4,askqty3,askqty2, askqty1, bidqty10, bidqty9, bidqty8, bidqty7, bidqty6, bidqty5, bidqty4, bidqty3, bidqty2, bidqty1 from OBData where date(data_time) = caldate and ticker in symbol
+		res.append!(res1)
+		res = select * from res order by data_time, ticker
+		return res
+	}
+	else{
+		return select ticker, data_time, ask10, ask9, ask8, ask7, ask6, ask5, ask4, ask3, ask2, ask1, bid10, bid9, bid8, bid7,bid6, bid5, bid4, bid3, bid2, bid1, askqty10, askqty9, askqty8, askqty7,askqty6, askqty5, askqty4, askqty3, askqty2, askqty1, bidqty10, bidqty9, bidqty8, bidqty7, bidqty6, bidqty5, bidqty4, bidqty3, bidqty2, bidqty1 from OBData where date(data_time) = caldate and ticker in symbol
+	}
+}
+
+// 第 1 档买价的最小值, 卖价的最大值
+defg getBottomTop(buy, sell, type){
+	if(buy[1] >= buy[0] and sell[1] >= sell[0]){
+		a = min(buy[0], sell[1])
+		b = max(buy[0], sell[1])
+	}
+	else if(buy[1] >= buy[0] and sell [1]<= sell[0]){
+		a = min(buy[0], sell[0])
+		b = max(buy[0], sell[0])
+	}
+	else if(buy[1] <= buy[0] and sell[1] <= sell[0]){
+		a = min(buy[1], sell[0])
+		b = max(buy[1], sell[0])
+	}
+	else if(buy[1] <= buy[0] and sell[1] >= sell[0]){
+		a = min(buy[1], sell[1])
+		b = max(buy[1], sell[1])
+	}
+	if(type == 0){
+		return a
+	}
+	else{
+		return b
+	}
+}
+
+// 计算价格变化范围
+def getPriceRange(buy, sell){
+	return moving(getBottomTop{ , , 0}, [buy, sell], 2), moving(getBottomTop{ , , 1}, [buy, sell], 2)
+}
+
+// 计算买卖压力指标
+defg calPress(ask, bid, askqty, bidqty, level = 5){
+	// test_prev = select * from test context by ticker, date(data_time)
+	// ask = matrix(test_prev["ask1"], test_prev["ask2"], test_prev["ask3"], test_prev["ask4"], test_prev["ask5"], test_prev["ask6"], test_prev["ask7"], test_prev["ask8"], test_prev["ask9"], test_prev["ask10"])
+	// bid = matrix(test_prev["bid1"], test_prev["bid2"], test_prev["bid3"], test_prev["bid4"], test_prev["bid5"], test_prev["bid6"], test_prev["bid7"], test_prev["bid8"], test_prev["bid9"], test_prev["bid10"])
+	// askqty = matrix(test_prev["askqty1"], test_prev["askqty2"], test_prev["askqty3"], test_prev["askqty4"], test_prev["askqty5"], test_prev["askqty6"], test_prev["askqty7"], test_prev["askqty8"], test_prev["askqty9"], test_prev["askqty10"])
+	// bidqty = matrix(test_prev["bidqty1"], test_prev["bidqty2"], test_prev["bidqty3"], test_prev["bidqty4"], test_prev["bidqty5"], test_prev["bidqty6"], test_prev["bidqty7"], test_prev["bidqty8"], test_prev["bidqty9"], test_prev["bidqty10"])
+
+	/* bid为10档申买价构成的矩阵, 示例: matrix(bid1, bid2, bid3, bid4, bid5, bid6, bid7, bid8, bid9, bid10)
+	 * bidqty为10档申买量构成的矩阵, 示例: matrix(bidqty1, bidqty2, bidqty3, bidqty4, bidqty5, bidqty6, bidqty7, bidqty8, bidqty9, bidqty10)
+	 * ask为10档申卖价构成的矩阵, 示例: matrix(ask1, ask2, ask3, ask4, ask5, ask6, ask7, ask8, ask9, ask10)
+	 * askqty为10档申卖量构成的矩阵, 示例: matrix(askqty1, askqty2, askqty3, askqty4, askqty5, askqty6, askqty7, askqty8, askqty9, askqty10)
+	 */
+	mid = iif((bid[0] != 0 and ask[0] != 0), (bid[0] + ask[0]) \ 2, iif(bid[0] == 0, ask[0], bid[0]))
+	// Weighted Averaged Price(WAP): 加权平均价格
+	WAP = (bid[0] * askqty[0] + ask[0] * bidqty[0]) \ (bidqty[0] + askqty[0])
+	if(mid.size() == 0){
+		return double(), double(), double(), double()
+    }
+	// 计算买卖压力指标 https://blog.csdn.net/qq_41996852/article/details/125594644
+	bidWapSum = rowSum((mid \ (bid - mid))[0 : level])
+	askWapSum = rowSum((mid \ (ask - mid))[0 : level])
+	BidPress = rowSum((bidqty * mid \ (bid - mid))[0 : level] \ bidWapSum)
+    AskPress = rowSum((askqty * mid \ (ask - mid))[0 : level] \ askWapSum)
+	Press = log(AskPress) - log(BidPress)
+	return Press
+}
+
+// 权重重新定义的买卖压力指标
+defg calNewPress(ask, bid, askqty, bidqty){
+	mid = iif((bid[0] != 0 and ask[0] != 0), (bid[0] + ask[0]) \ 2, iif(bid[0] == 0, ask[0], bid[0]))
+	dif = iif(abs(ask[4] - mid) > abs(bid[4] - mid), abs(bid[4] - mid), abs(ask[4] - mid))
+	BidPress = rowSum((1 - 0.2 * (abs(bid[bid >= mid - dif and bid <= mid + dif] - mid) \ 0.01)) * bidqty)
+	AskPress = rowSum((1 - 0.2 * (abs(ask[ask >= mid - dif and ask <= mid + dif] - mid) \ 0.01)) * askqty)
+	Press = log(AskPress) - log(BidPress)
+	return Press
+}
+
+// 第 1 档
+def getL0factors(test, tradesAll, ordersAll){
+	// 计算每100ms的最低最高价格
+	priceRange = select ticker, data_time, getPriceRange(bid1, ask1) as `minPrice`maxPrice from test
+	priceRange = select min(minPrice) as minPrice, max(maxPrice) as maxPrice from priceRange group by ticker, data_time as TradeTime
+	// 计算 主动买入数量
+	activeBid = select sum(TradeQty) as activeBidQty_L0 from lj(priceRange, tradesAll, `TradeTime) where ExecType = `F and BidApplSeqNum > OfferApplSeqNum and Price >=minPrice and Price <= maxPrice group by ticker, TradeTime
+	// 计算 主动卖出数量
+	activeAsk = select sum(TradeQty) as activeAskQty_L0 from lj(priceRange, tradesAll, `TradeTime) where ExecType = `F and BidApplSeqNum < OfferApplSeqNum and Price >=minPrice and Price <= maxPrice group by ticker, TradeTime
+	// 计算总买入委托数量
+	bidAll = select sum(orderQty) as bidAll from lj(priceRange, ordersAll, `ticker`TradeTime, `SecurityID`TransacTime) where Side = `1 and (Price >=minPrice or OrderType = `1) group by ticker, TradeTime
+	// 计算总卖出委托数量
+	askAll = select sum(orderQty) as askAll from lj(priceRange, ordersAll, `ticker`TradeTime, `SecurityID`TransacTime) where Side = `2 and (Price <= maxPrice or OrderType = `1) group by ticker, TradeTime
+	// 买入撤单
+	bidCancel = select SecurityID, BidApplSeqNum as ApplSeqNum from tradesAll where ExecType = `4 and BidApplSeqNum != 0
+	// 卖出撤单
+	askCancel = select SecurityID, OfferApplSeqNum as ApplSeqNum from tradesAll where ExecType = `4 and OfferApplSeqNum != 0
+	// 总买入撤单量
+	bidCancel = select sum(orderQty) as cancelBidQty_L0 from ej(ordersAll, bidCancel,`SecurityID`ApplSeqNum).lj(priceRange, `TransacTime, `TradeTime) where Price >=minPrice and Price<=maxPrice group by SecurityID as ticker, transacTime as TradeTime
+	// 总卖出撤单量
+	askCancel = select sum(orderQty) as cancelAskQty_L0 from ej(ordersAll, askCancel,`SecurityID`ApplSeqNum).lj(priceRange, `TransacTime, `TradeTime) where Price >=minPrice and Price<=maxPrice group by SecurityID as ticker, transacTime as TradeTime
+	// 总买入委托 - 主买
+	L0factor = select *, (bidAll - activeBidQty_L0) as bidPendingOrderQty_L0 from (lj(bidAll, activeBid, `ticker`TradeTime).lj(bidCancel,`ticker`TradeTime)).nullFill!(0)
+	// 总卖出委托 - 主卖
+	L0factor = select *, (askAll - activeAskQty_L0) as askPendingOrderQty_L0 from (lj(L0factor, askAll, `ticker`TradeTime).lj(activeAsk, `ticker`TradeTime).lj(askCancel,`ticker`TradeTime)).nullFill!(0)
+	L0factor.rename!(`TradeTime, `data_time)
+	return L0factor
+}
+
+// 2 - 5 档
+def getOtherLevelFactors(test, obchg){
+	levelFactors = select sum(buy_1) as buy_1, sum(buy_2) as buy_2, sum(buy_3) as buy_3, sum(buy_4) as buy_4, sum(sell_1) as sell_1, sum(sell_2) as sell_2, sum(sell_3) as sell_3, sum(sell_4) as sell_4 from obchg group by ticker, data_time
+	levelFactors = select ticker, data_time, iif(buy_1 > 0, buy_1, 0) as bidPendingOrderQty_L1, iif(buy_1 < 0, buy_1, 0) as cancelBidQty_L1, iif(buy_2 > 0, buy_2, 0) as bidPendingOrderQty_L2, iif(buy_2 < 0, buy_2, 0) as cancelBidQty_L2, iif(buy_3 > 0, buy_3, 0) as bidPendingOrderQty_L3, iif(buy_3 < 0, buy_3, 0) as cancelBidQty_L3, iif(buy_4 > 0, buy_4, 0) as bidPendingOrderQty_L4, iif(buy_4 < 0, buy_4, 0) as cancelBidQty_L4, iif(sell_1 > 0, sell_1, 0) as askPendingOrderQty_L1, iif(sell_1 < 0, sell_1, 0) as cancelAskQty_L1, iif(sell_2 > 0, sell_2, 0) as askPendingOrderQty_L2, iif(sell_2 < 0, sell_2, 0) as cancelAskQty_L2, iif(sell_3 > 0, sell_3, 0) as askPendingOrderQty_L3, iif(sell_3 < 0, sell_3, 0) as cancelAskQty_L3, iif(sell_4 > 0, sell_4, 0) as askPendingOrderQty_L4, iif(sell_4 < 0, sell_4, 0) as cancelAskQty_L4 from levelFactors
+	return levelFactors
+}
+
+def getOBCHG(calDate, symbol, OBData, t){
+	for(i in calDate){// i = calDate[0]
+		if(i == calDate[0]){
+			test = prepareOBData_cal(i, symbol, OBData, t)
+		}
+		else{
+			tmp =prepareOBData_cal(i, symbol, OBData, t)
+			test.append!(tmp)
+		}
+	}
+
+	Press = select ticker, data_time, (ask1 + bid1) \ 2 as mid_price, iif((bid1 != 0 and ask1 != 0), 0, iif(bid1 == 0, -1, 1)) as limit_flag, calPress(matrix(ask1, ask2, ask3, ask4, ask5, ask6, ask7, ask8, ask9, ask10), matrix(bid1, bid2, bid3, bid4, bid5, bid6, bid7, bid8, bid9, bid10), matrix(askqty1, askqty2, askqty3, askqty4, askqty5, askqty6, askqty7, askqty8, askqty9, askqty10), matrix(bidqty1, bidqty2, bidqty3, bidqty4, bidqty5, bidqty6, bidqty7, bidqty8, bidqty9, bidqty10), 5) as "Press", calNewPress(matrix(ask1, ask2, ask3, ask4, ask5, ask6, ask7, ask8, ask9, ask10), matrix(bid1, bid2, bid3, bid4, bid5, bid6, bid7, bid8, bid9, bid10), matrix(askqty1, askqty2, askqty3, askqty4, askqty5, askqty6, askqty7, askqty8, askqty9, askqty10), matrix(bidqty1, bidqty2, bidqty3, bidqty4, bidqty5, bidqty6, bidqty7, bidqty8, bidqty9, bidqty10)) as "newPress" from test context by ticker, date(data_time)
+	// 每100ms求平均值
+	Press = select avg(mid_price) as mid_price, last(limit_flag) as limit_flag, avg(Press) as Press, avg(newPress) as newPress from Press group by ticker, bar(data_time, t) as data_time
+	
+	for(i in calDate){// i = calDate[0]
+		if(i == calDate[0]){
+			for (sym in symbol){// sym = symbol[0]
+				if (sym == symbol[0]){
+					t1 = select * from test where date(data_time) = i and ticker = sym
+					obchg = calc_obchg(t1, sym, i, 10)
+				}
+				else{
+					t1 = select * from test where date(data_time) = i and ticker = sym
+					tmpobchg = calc_obchg(t1, sym, i, 10)
+					obchg.append!(tmpobchg)
+				}
+			}
+		}
+		else{
+			for (sym in symbol){
+				if (sym == symbol[0]){
+					t1 = select * from test where date(data_time) = i and ticker = sym
+					tmp = calc_obchg(t1, sym, i, 10)
+					obchg.append!(tmp)
+				}
+				else{
+					t1 = select * from test where date(data_time) = i and ticker = sym
+					tmp = calc_obchg(t1, sym, i, 10)
+					obchg.append!(tmp)
+				}
+			}
+		}
+	}
+
+	OBTrade = loadTable('dfs://TSDB_Trade','trade')
+	OBOrder = loadTable('dfs://TSDB_Order','order')
+
+	tradesAll =  select * from OBTrade where date(OrigTime) in calDate and SecurityID in symbol
+	ordersAll =  select * from OBOrder where date(OrigTime) in calDate and SecurityID in symbol
+	// 前 5 档
+	L0_4factors = getL0factors(test, tradesAll, ordersAll).lj(getOtherLevelFactors(test, obchg), `ticker`data_time).dropColumns!(`bidAll`askAll)
+	// 
+	pre_obchg = select last(limit_seg) as limit_seg, sum(buy_cg) as buy_cg, sum(sell_cg) as sell_cg, sum(obchg) as obchg, sum(buy_0) as buy_0, sum(buy_1) as buy_1, sum(buy_2) as buy_2, sum(buy_3) as buy_3, sum(buy_4) as buy_4, sum(sell_0) as sell_0, sum(sell_1) as sell_1, sum(sell_2) as sell_2, sum(sell_3) as sell_3, sum(sell_4) as sell_4 from obchg group by ticker, interval(data_time, t, 'prev') as data_time
+	t1 = select data_time, ticker, limit_seg ,buy_cg, sell_cg, obchg, buy_0, buy_1, buy_2, buy_3, buy_4, sell_0, sell_1, sell_2, sell_3, sell_4 from pre_obchg where (time(data_time) >= 09:30:00.000 and time(data_time) < 11:30:00.000) or (time(data_time) >= 13:00:00.000 and time(data_time)< 15:00:00)
+	t1 = select * from t1 where date(data_time) in calDate
+	update t1 set buy_cg = NULL, sell_cg = NULL, obchg = NULL where limit_seg % 2 == 1
+	// 剔除14: 57后的数据
+	t1 = removeDailyTimeSeries(t1)
+	L0_4factors = removeDailyTimeSeries(L0_4factors)
+	Press = removeDailyTimeSeries(Press)
+	update Press set Press = NULL, newPress = NULL where limit_flag == 1
+	return t1, L0_4factors, Press
+}
