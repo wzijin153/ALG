@@ -1,0 +1,62 @@
+//1.准备工作
+clearAllCache()
+
+//2.参数设置
+// symbol = ["002864", "002750"]
+symbol = ["002864"]
+t = 100	//单位: ms, 100即100ms，1000即1s
+startDate = 2022.05.06
+// endDate = 2022.05.09
+endDate = 2022.05.06
+marketDay = getMarketCalendar('CFFEX')
+// calDate: 要计算的因子的数据日期区间
+calDate = startDate..endDate
+calDate = calDate[calDate in marketDay]
+// standardDates: 采样区间
+standardStartDate = 2022.05.05
+standartEndDate = 2022.05.09
+standardDates=standardStartDate..standartEndDate
+standardDates = standardDates[standardDates in marketDay]
+
+OBData = loadTable('dfs://TSDB_OB','SZ')
+referSymbols = ["002750", "002873"]
+referThreshold = 0.00	//指数阈值
+ifWavg = false	// 是否计算加权平均数
+level = 5	//加权平均档位
+
+removeExVal = false	//去极值开关
+removeStartDate = 2022.05.05
+removeEndDate = 2022.05.06
+removeDates = removeStartDate..removeEndDate
+removeDates = removeDates[removeDates in marketDay]
+//limitFlag = true
+//
+//if (limitFlag==true){
+//	limitTime = getLimitFlag(calDate, symbol, OBData, t, ifWavg, level)
+//}
+
+//3.计算
+timer BidOfferStockAmount, BidOfferOrderAmount, ActiveStockQtyDifFactors, ActiveOrderQtyDifFactors = getNewFactors(calDate, standardDates, symbol, t)
+timer OBCHG, L0_4Orders, Press = getOBCHG(calDate, symbol, OBData, t)
+timer momentum_factors, ms = getQuotaChg(calDate, symbol, OBData, t, ifWavg, level)
+timer windowFactors, obchg_features, ActiveStockQtyDifFactors, ActiveOrderQtyDifFactors = getWindowFactors(calDate, momentum_factors, OBCHG, ActiveStockQtyDifFactors,ActiveOrderQtyDifFactors, t)
+timer referData = getReferData(calDate, referSymbols, referThreshold, OBData, t, ifWavg, level, momentum_factors, symbol)
+
+if (removeExVal == true){
+	timer removeBOSA, removeBOOA, removeASQDF, removeAOQDF = getNewFactors(removeDates, standardDates, symbol, t)
+	timer removeOBCHG = getOBCHG(removeDates, symbol, OBData, t)
+	timer removeMF, removeMS = getQuotaChg(removeDates, symbol, OBData, t, ifWavg, level)
+	timer  removeWF, removeOF, removeASQDF, removeAOQDF = getWindowFactors(removeDates, removeMF, removeOBCHG, removeASQDF, removeAOQDF, t)
+
+//	removeExValue(BidOfferStockAmount, removeBOSA, removeBOSA.colNames()[2:])
+//	removeExValue(BidOfferOrderAmount, removeBOOA, removeBOOA.colNames()[2:])
+//	removeExValue(ActiveStockQtyDifFactors, removeASQDF, removeASQDF.colNames()[2:])
+//	removeExValue(ActiveOrderQtyDifFactors, removeAOQDF, removeAOQDF.colNames()[2:])
+	removeExValue(OBCHG, removeOBCHG, removeOBCHG.colNames()[2:])
+//	removeExValue(momentum_factors, removeMF, removeMF.colNames()[11:])
+	removeExValue(ms, removeMS, [`Velocity])
+//	removeExValue(windowFactors, removeWF, removeWF.colNames()[6:])
+	removeExValue(obchg_features, removeOF, [`obchg])
+//	removeExValue(referData, removeRD, removeRD.colNames()[12:])
+}
+

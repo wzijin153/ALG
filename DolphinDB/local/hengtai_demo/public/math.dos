@@ -1,0 +1,165 @@
+//module public::math
+def round_fix(num,round_num){
+	num_fix = round(iif(num>0,num+1E-8,num-1E-8),round_num)
+	return num_fix
+}
+
+def zero_percise(x, precise=1e-10){
+    return iif(abs(x) < precise, 0, x)
+}
+
+def math_corr(x, y){
+	cor = covar(x, y) / (std(x) * std(y))
+	return cor
+}
+
+def math_wght_covar(x, y, w){
+	v = (x - wavg(x, w)) * (y - wavg(y, w))
+	cov = wavg(v, w)
+return cov}
+
+
+def math_wght_std(x, w){
+	std = math_wght_covar(x, x, w)
+	std = sqrt(std)
+return std}
+
+
+def math_wght_std_nomean(x, w){
+	x_sq = mul(x, x)
+	var = dot(x_sq, w)
+	std = sqrt(var \ sum(w))
+return std}
+
+
+def math_wght_corr(x, y, w){
+	var_sqrt = math_wght_std(x, w) * math_wght_std(y, w)
+	if (var_sqrt == 0)
+		return  0.0
+	else {
+		corr = math_wght_covar(x, y, w) \ var_sqrt
+		return corr}
+}
+
+
+def math_wght_skew(x, w){
+	x_var = math_wght_covar(x, x, w)
+	x_std = sqrt(x_var)
+	if (x_std == 0){
+		skew = 0.0}
+	else{
+		x_1 = x - wavg(x, w)
+		x_2 = square(x_1)
+		len = size(w)
+		adj = sqrt((len - 1) * len) \ (len - 2)
+		skew = dot(x_2, x_1) \ (x_var * x_std)
+		skew = skew * adj \ len}
+return skew}
+
+
+def math_matrix_wgskew(mat_x, vec_w){
+	tnp_w = transpose(take(vec_w, mat_x.size())$shape(mat_x)[0]:shape(mat_x)[1])
+	tnp_x = transpose(mat_x)
+	mat_x1 = mat_x - wavg(tnp_x, tnp_w)
+	mat_v = mat_x1 * mat_x1
+	mat_cov = wavg(transpose(mat_v), tnp_w)
+	mat_std = sqrt(zero_percise(mat_cov))
+
+	mat_x2 = square(mat_x1)
+	adj = sqrt((size(vec_w) - 1) * size(vec_w)) \ (size(vec_w) - 2)
+	skew = sum(transpose(mat_x1 * mat_x2)) \ (mat_cov * mat_std)
+	skew[skew == NULL] = 0.0
+	skew = skew * adj \ size(vec_w)
+return skew}
+
+
+def math_wght_coskew01(x, y, w){
+	// skew matrix col 0 index 1
+	//  print(size(x))
+	x_var = math_wght_covar(x, x, w)
+	x_std = sqrt(x_var)
+	y_var = math_wght_covar(y, y, w)
+	if (y_var * x_std == 0){
+		skew = 0.0}
+	else{
+		x_1 = x - wavg(x, w)
+		y_1 = y - wavg(y, w)
+		y_2 = square(y_1)
+		len = size(w)
+		adj = sqrt((len - 1) * len) \ (len - 2)
+
+		skew = dot(y_2, x_1) \ (y_var * x_std)
+		skew = skew * adj \ len}
+return skew}
+
+
+def math_matrix_wgcoskew01(mat_x, mat_y, vec_w){
+	tnp_w = transpose(take(vec_w, mat_x.size())$shape(mat_x)[0]:shape(mat_x)[1])
+	tnp_x = transpose(mat_x)
+	tnp_y = transpose(mat_y)
+	mat_x1 = mat_x - wavg(tnp_x, tnp_w)
+	mat_xstd = sqrt(wavg(transpose(mat_x1 * mat_x1), tnp_w))
+	mat_y1 = mat_y - wavg(tnp_y, tnp_w)
+	mat_yvar = (wavg(transpose(mat_y1 * mat_y1), tnp_w))
+
+	mat_y2 = square(mat_y1)
+	adj = sqrt((size(vec_w) - 1) * size(vec_w)) \ (size(vec_w) - 2)
+	skew = sum(transpose(mat_y2 * mat_x1)) \ zero_percise(mat_yvar * mat_xstd)
+	skew[skew == NULL] = 0.0
+	skew = skew * adj \ size(vec_w)
+return skew}
+
+
+def math_wght_coskew10(x, y, w){
+	// skew matrix col 1 index 0
+	x_var = math_wght_covar(x, x, w)
+	y_var = math_wght_covar(y, y, w)
+	y_std = sqrt(y_var)
+	if (x_var * y_std == 0){
+		skew = 0.0}
+	else{
+		x_1 = x - wavg(x, w)
+		x_2 = square(x_1)
+		y_1 = y - wavg(y, w)
+		len = size(w)
+		adj = sqrt((len - 1) * len) \ (len - 2)
+
+		skew = dot(x_2, y_1) \ (zero_percise(x_var) * y_std)
+		skew = skew * adj \ len}
+return skew}
+
+
+def math_matrix_wgcoskew10(mat_x, mat_y, vec_w){
+	tnp_w = transpose(take(vec_w, mat_x.size())$shape(mat_x)[0]:shape(mat_x)[1])
+	tnp_x = transpose(mat_x)
+	tnp_y = transpose(mat_y)
+	mat_x1 = mat_x - wavg(tnp_x, tnp_w)
+	mat_xvar = wavg(transpose(mat_x1 * mat_x1), tnp_w)
+	mat_y1 = mat_y - wavg(tnp_y, tnp_w)
+	mat_ystd = sqrt(wavg(transpose(mat_y1 * mat_y1), tnp_w))
+
+	mat_x2 = square(mat_x1)
+	adj = sqrt((size(vec_w) - 1) * size(vec_w)) \ (size(vec_w) - 2)
+	skew = sum(transpose(mat_x2 * mat_y1)) \ zero_percise(mat_xvar * mat_ystd)
+	skew[skew == NULL] = 0.0
+	skew = skew * adj \ size(vec_w)
+return skew}
+
+
+defg math_reg_smt(x, y){
+	x_mean = x -mean(x)
+	slope = math_corr(x_mean, y) * std(y) \ std(x_mean)
+	y_hat = mean(y) + slope * x_mean
+	reg_error_std = std(y - y_hat)
+	sxx = std(x_mean) \ (size(x_mean) - 1)
+	if (sxx > 0){
+		std_slope = reg_error_std \ sxx
+	}else{
+		std_slope = 0.0
+	}
+	if (std_slope > 0){
+		smt = slope \ std_slope
+	}else{
+		smt = 0.0
+	}
+return smt}

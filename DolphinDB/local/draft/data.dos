@@ -1,0 +1,21 @@
+
+n = 360000
+mon = symbol(["OCT23", "NOV23", "DEC23", "JAN24", "FEB24", "MAR24", "APR24", "MAY24", "JUN24", "JUL24", "AUG24", "SEP24", "OCT24", "NOV24", "DEC24", "JAN25", "FEB25", "MAR25", "APR25", "MAY25", "JUN25", "JUL25", "AUG25", "SEP25", "OCT25", "NOV25", "DEC25", "JAN26", "FEB26", "MAR26", "APR26", "MAY26", "JUN26", "JUL26", "AUG26", "SEP26"])
+contract = take(mon, n)
+BRT_FT = 75 + rand(11.0, n)
+DFL = 15 + rand(40.0, n)
+BRT_SW = 75 + rand(11.0, n)
+EFP = 8 + rand(5.0, n)
+ROLLS = rand(1.0, n)
+// OUTRIGHT = 1.22 + 
+
+initial_time= take(now(), 36)
+time = initial_time
+for (i in 1..10000) {
+    time.append!(initial_time + i * 1000)// 1000ms = 1s
+}
+undef("time")
+
+t = table(contract, BRT_FT, DFL, BRT_SW, EFP, ROLLS, time)
+
+test = t.unpivot(["contract"], ["BRT_FT", "DFL", "BRT_SW", "EFP", "ROLLS"])

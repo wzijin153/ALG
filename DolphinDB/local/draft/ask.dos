@@ -1,0 +1,37 @@
+
+// https://ask.dolphindb.net/question/3382
+tmp = table(1 3 4 5 6 as a, take(`A`B, 5) as b, rand(10.0, 5) as val)
+share tmp as new
+old = table(2 3 4 7 8 as a, take(`A`B, 5) as b, rand(10.0, 5) as val)
+timer select * from new where makeKey(a, b) not in makeKey(old.a, old.b)
+// 新方法
+timer select new.* from lj(new, old, `a) where old.a is null
+
+
+// https://ask.dolphindb.net/question/939
+@state 
+def cci(high, low, close, timeP){
+    tp = rowAvg(high,low, close)
+    dev = mmad(tp, timeP)
+    sma = mavg(tp, timeP)
+    return (tp - sma) / (0.015 * dev) 
+}
+
+def mmadas(tp,sma,timeP){
+    return moving(def(x,y)->avg(abs(x - y.last())), [tp, sma], timeP)
+}
+
+dataFilePath = "/hdd/hdd7/zjwang/DolphinDB_Linux64_V2.00.11/server/clusterDemo/data/cs-cci.csv"
+tmpTB = loadText(dataFilePath)
+a = select  Date, rowAvg(high,low,close) as tp,mavg(rowAvg(high,low,close),20) as sma from tmpTB
+
+def mmadas(tp,sma,timeP){
+    return moving(def(x,y)->avg(abs(x - y.last())), [tp, sma], timeP)
+}
+
+defg mmadas(x, y){
+    return avg(abs(x - y.last()))
+}
+
+select Date, moving(mmadas, [tp, sma], 20) as dev from a
+

@@ -1,0 +1,63 @@
+//module factor_maker
+def initStk2FutFvalSyncdict(ftitle){
+	syncDict([`init], [1 2 3], ftitle + `_fval)
+	return 1
+}
+
+
+def initStk2FutFactortb(symbol, tdate, ruler_tb){
+	factor_tb = table(take(symbol, ruler_tb.size()) as Symbol, take(tdate, ruler_tb.size()) as TradeDate, ruler_tb[`k_time] as TradeTime)
+	return factor_tb
+}
+
+
+def formStk2FutFactortb(val_fval_dict, mutable factor_tb){
+	for (col in val_fval_dict.keys()){
+		if (not col in [`init]){
+			factor_tb[col] = val_fval_dict[col]
+		}	
+	}
+	return 1
+}
+
+
+def judgeStkMarket(trade_tb){
+	if (`SZ in trade_tb.Market){
+		market = `SZ
+	}else if (`SH in trade_tb.Market){
+		market = `SH
+	}else{
+		market = NULL
+	}
+	return market
+}
+
+
+def calcStk2FutTsfactor(mutable val_fval_dict, ufunc, fname, rcycle_dict, ruler_tb, trade_dict, entrust_dict, code, qtrade_num, qentrust_num, sig_num){
+	// code_trade_tb = trade_dict[code].copy()
+	// code_entrust_tb = entrust_dict[code].copy()
+	fname_tip = fname + `_ + code + `_T + qtrade_num + `E + qentrust_num + `S + sig_num
+	fval = ufunc(rcycle_dict, ruler_tb, trade_dict[code], entrust_dict[code], qtrade_num, qentrust_num, sig_num)
+	val_fval_dict[fname_tip] = double(fval.ffill())
+	return 1
+}
+
+
+def calcStk2FutTsfactor_fp(mutable val_fval_dict, rcycle_dict, ruler_tb, trade_dict, entrust_dict, code, ufunc, fname, qtrade_num, qentrust_num, sig_num){
+	// code_trade_tb = trade_dict[code].copy()
+	// code_entrust_tb = entrust_dict[code].copy()
+	fname_tip = fname + `_ + code + `_T + qtrade_num + `E + qentrust_num + `S + sig_num
+	try{
+		fval = ufunc(rcycle_dict, ruler_tb, trade_dict[code], entrust_dict[code], qtrade_num, qentrust_num, sig_num)
+	}catch(ex){
+		fval = take(0.0, ruler_tb.size())
+	}
+	val_fval_dict[fname_tip] = double(fval.ffill())
+	return 1
+}
+
+
+def calcStk2FutTsfactor_parallel(mutable val_fval_dict, trade_dict, entrust_dict, func_list){
+	flag_tp = ploop(call{, val_fval_dict, trade_dict, entrust_dict}, func_list)
+	return 1
+}

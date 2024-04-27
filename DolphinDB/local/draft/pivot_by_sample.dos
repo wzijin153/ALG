@@ -1,0 +1,18 @@
+n = 10802
+timestamp = (09:30:00..11:00:00).append!(13:30:00..15:00:00)
+symList = `IBM`C`AAPL`BABA`MS`AAPL`MSFT`GOOG
+t = table(1 : 0, `timestamp`sym`qty`price, [SECOND, SYMBOL, INT, DOUBLE])
+for (i in symList){//
+    sym = take(i, n)
+    qty = 1000 + rand(9000, n)
+    price = 5.0 + rand(200.0, n)
+    tb = table(timestamp, sym, qty, price)
+    t.append!(tb)
+}
+
+select price from t pivot by timestamp, sym
+
+
+
+
+

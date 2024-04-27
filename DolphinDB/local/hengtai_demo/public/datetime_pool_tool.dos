@@ -1,0 +1,77 @@
+//module public::datetime_pool_tool
+
+def getTradedate(stt_date, end_date){
+	assert type(stt_date) == 6
+	assert type(end_date) == 6
+	dbtb = loadTable(SF_TS_STRG_VAL.TickPath, SF_TS_STRG_VAL.TickTableName)
+	date_vc =  exec distinct(trade_date) from dbtb where trade_date >= stt_date && trade_date <= end_date
+	sort!(date_vc)
+return date_vc}
+
+
+def pullDatepoolfromTB(db_nm, data_tb, code_pool){
+	if (db_nm == 0){
+		dbtb = data_tb
+	}else{
+		if (startsWith(db_nm, "dfs://")) db_name = db_nm  
+		else db_name = "dfs://WmCb" + db_nm
+		dbtb = loadTable(db_name, data_tb)
+	}
+	date_pool = exec distinct(trade_date) from dbtb where secu_code in code_pool
+	sort!(date_pool)
+return date_pool}
+
+
+def crossDatepoolfromTB(db_nm, data_tb, date_pool, code_pool){
+	date_exist_pool = pullDatepoolfromTB(db_nm, data_tb, code_pool)
+	date_add_pool = []
+	for (date in date_pool){
+		if (date in date_exist_pool){
+			continue
+		}else {
+			date_add_pool.append!(date)
+		}
+	}
+return date_add_pool}
+
+
+def getGapMonthStt(stt_date, end_date, gap){
+	date_list = monthBegin(stt_date..end_date, stt_date, gap)
+	date_list = distinct(date_list)
+	date_list.sort!()
+	date_list = date_list[(date_list>=stt_date) && (date_list<=end_date)]
+return date_list}
+
+
+def getGapMonthEnd(stt_date, end_date, gap){
+	date_list = monthEnd(stt_date..end_date, stt_date, gap)
+	date_list = distinct(date_list)
+	date_list.sort!()
+	date_list = date_list[(date_list>=stt_date) && (date_list<=end_date)]
+return date_list}
+
+
+def getGapWeekStt(stt_date, end_date, gap){
+	date_list = getTradedate(stt_date, end_date)
+	date_list = weekBegin(date_list, , stt_date, gap)
+	date_list = distinct(date_list)
+	date_list.sort!()
+	date_list = date_list[(date_list>=stt_date) && (date_list<=end_date)]
+return date_list}
+
+
+def getGapWeekEnd(stt_date, end_date, gap){
+	date_list = getTradedate(stt_date, end_date)
+	date_list = weekEnd(date_list, , stt_date, gap)
+	date_list = distinct(date_list)
+	date_list.sort!()
+	date_list = date_list[(date_list>=stt_date) && (date_list<=end_date)]
+return date_list}
+
+
+def gatGapTradeDate(stt_date, end_date, gap){
+	date_vc = date(stt_date..end_date)
+	idx_vc = mod(0..(size(date_vc) - 1), gap)
+	date_vc = date_vc[idx_vc == 0]
+	date_vc.sort!()
+return date_vc}

@@ -1,0 +1,18 @@
+
+data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+points = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+bandwidth = 1.0
+
+def simple_gaussian_kde(data, points, bandwidth) {
+    diff = array(DOUBLE)
+    for (i in 1..points.size() - 1) {
+        diff.append!(square(points[i] - data[:]))
+    }
+    diff = diff.reshape(data.size():points.size()).transpose()
+    factor = 1 / (sqrt(2 * pi) * bandwidth)
+    exp_component = exp(-diff / (2 * square(bandwidth)))
+    density = rowSum(exp_component) * factor / data.size()
+    return density
+}
+
+res = simple_gaussian_kde(data, points, bandwidth)

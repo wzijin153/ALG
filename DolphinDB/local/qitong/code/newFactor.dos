@@ -1,0 +1,206 @@
+
+/**
+ * @description: 根据采样日期区间计算该区间内每只股票的采样平均交易额和采样标准差
+ * @param standardDates: 采样日期区间
+ * @param OBOrder: order表
+ * @param symbol: 股票代码
+ */
+def getStandard(standardDates, OBOrder, symbol){
+	// 根据传入的standardDates和symbol对order表进行过滤
+	standardOrders = select * from OBOrder where date(OrigTime) in standardDates and SecurityID in symbol
+	// 按照股票代码分组计算采样平均交易价格和交易价格标准差
+	standardPrice = exec avg(log(Price * OrderQty)) from standardOrders group by SecurityID
+	standardStdp = exec stdp(log(Price * OrderQty)) from standardOrders group by SecurityID
+	// 释放standardOrders
+	undef("standardOrders")
+	return standardPrice, standardStdp
+}
+
+/**
+ * @description: 计算成交表相关信息
+ * @param trades: 成交表, "dfs://TSDB_Order","order"
+ * @param orders: 委托表, "dfs://TSDB_Trade","trade"
+ * @param t: 时间间隔, 100ms
+ * @param standardPrice: 采样平均交易价格
+ * @param standardStdp: 采样交易价格标准差
+ * @param avgStockWin: 滑动窗口
+ * @return: 每100ms的trade表里的买入卖出大中小单成交量以及在总成交量中的占比, 以及在order表里对应的大中小单总委托成交量的占比
+ */
+def getStockAmount(trades, orders, t, standardPrice, standardStdp, avgStockWin = 50){
+	// ApplSeqNum: 订单号, BidApplSeqNum: 买方订单号, OfferApplSeqNum: 卖方订单号, ExecType: 成交类型, F=成交
+	// 大单
+	BigSeq = exec ApplSeqNum from orders where log(Price * OrderQty) > (standardPrice + standardStdp)
+	// 中单
+	MidSeq = exec ApplSeqNum from orders where log(Price * OrderQty) >= standardPrice and log(Price * OrderQty) <=(standardPrice + standardStdp)
+	// 小单
+	SmallSeq = exec ApplSeqNum from orders where log(Price * OrderQty) < standardPrice
+	// 设置买入的大中小单
+	update trades set OrderType = "BidBig" where BidApplSeqNum > OfferApplSeqNum and ExecType = `F and BidApplSeqNum in BigSeq
+	update trades set OrderType = "BidMid" where BidApplSeqNum > OfferApplSeqNum and ExecType = `F and BidApplSeqNum in MidSeq
+	update trades set OrderType = "BidSmall" where BidApplSeqNum > OfferApplSeqNum and ExecType = `F and BidApplSeqNum in SmallSeq
+	// 设置买出的大中小单
+	update trades set OrderType = "OfferBig" where BidApplSeqNum < OfferApplSeqNum and ExecType = `F and OfferApplSeqNum in BigSeq
+	update trades set OrderType = "OfferMid" where BidApplSeqNum < OfferApplSeqNum and ExecType = `F and OfferApplSeqNum in MidSeq
+	update trades set OrderType = "OfferSmall" where BidApplSeqNum < OfferApplSeqNum and ExecType = `F and OfferApplSeqNum in SmallSeq
+	// 以t = 100ms为连续窗口, 计算每100ms的总成交量
+	BidBigStockQty = select sum(TradeQty).double() as BidBigStockQty from trades where OrderType="BidBig" and ExecType = `F group by interval(OrigTime, t, 0) as OrigTime
+	BidMidStockQty = select sum(TradeQty).double() as BidMidStockQty from trades where OrderType="BidMid" and ExecType = `F group by interval(OrigTime, t, 0) as OrigTime
+	BidSmallStockQty = select sum(TradeQty).double() as BidSmallStockQty from trades where OrderType="BidSmall" and ExecType = `F group by interval(OrigTime, t, 0) as OrigTime
+	OfferBigStockQty = select sum(TradeQty).double() as OfferBigStockQty from trades where OrderType="OfferBig" and ExecType = `F group by interval(OrigTime, t, 0) as OrigTime
+	OfferMidStockQty = select sum(TradeQty).double() as OfferMidStockQty from trades where OrderType="OfferMid" and ExecType = `F group by interval(OrigTime, t, 0) as OrigTime
+	OfferSmallStockQty = select sum(TradeQty).double() as OfferSmallStockQty from trades where OrderType="OfferSmall" and ExecType = `F group by interval(OrigTime, t, 0) as OrigTime
+	// 将上面的计算结果联合成一张表
+	res = select last(SecurityID) as SecurityID from trades where ExecType = `F group by interval(OrigTime, t, 'prev') as OrigTime
+	res = res.lj(BidBigStockQty, "OrigTime").lj(BidMidStockQty, "OrigTime").lj(BidSmallStockQty, "OrigTime").lj(OfferBigStockQty, "OrigTime").lj(OfferMidStockQty,"OrigTime").lj(OfferSmallStockQty,"OrigTime").nullFill!(0)
+	// 计算买入和卖出的成交量总和
+	res = select *, (BidBigStockQty + BidMidStockQty + BidSmallStockQty) as BidSumStockQty, (OfferBigStockQty + OfferMidStockQty + OfferSmallStockQty) as OfferSumStockQty from res
+	// 以50的滑动窗口计算总和成交量的平均平方根, 买入和卖出的大中小单分别在买入和卖出总成交量中的占比
+	res = (select *, mavg(sqrt(BidSumStockQty + OfferSumStockQty), avgStockWin, 1) as avgStockQtySqrt, (BidBigStockQty \ BidSumStockQty) as BidBigPercent, (BidMidStockQty \ BidSumStockQty) as BidMidPercent, (BidSmallStockQty \ BidSumStockQty) as BidSmallPercent, (OfferBigStockQty \ OfferSumStockQty) as OfferBigPercent, (OfferMidStockQty \ OfferSumStockQty) as OfferMidPercent, (OfferSmallStockQty \ OfferSumStockQty) as OfferSmallPercent from res).nullFill!(0)
+	// 计算主动买入和卖出的订单号, BidApplSeqNum > OfferApplSeqNum: 主动买入, BidApplSeqNum < OfferApplSeqNum: 主动卖出
+	BidApplNum = exec distinct(BidApplSeqNum) from trades where BidApplSeqNum > OfferApplSeqNum and ExecType = `F
+	OfferApplNum = exec distinct(OfferApplSeqNum) from trades where BidApplSeqNum < OfferApplSeqNum and ExecType = `F
+	// 计算委托表里的买入大中小单的总成交量
+	BidBigQty = exec sum(OrderQty) from orders where log(Price * OrderQty) > (standardPrice + standardStdp) and ApplSeqNum in BidApplNum
+	BidMidQty = exec sum(OrderQty) from orders where log(Price * OrderQty) >= standardPrice and log(Price * OrderQty) <= (standardPrice + standardStdp) and ApplSeqNum in BidApplNum
+	BidSmallQty = exec sum(OrderQty) from orders where log(Price * OrderQty) < standardPrice and ApplSeqNum in BidApplNum
+	// 计算委托表里的卖出大中小单的总成交量
+	OfferBigQty = exec sum(OrderQty) from orders where log(Price * OrderQty) > (standardPrice + standardStdp) and ApplSeqNum in OfferApplNum
+	OfferMidQty = exec sum(OrderQty) from orders where log(Price * OrderQty) >= standardPrice and log(Price * OrderQty) <= (standardPrice + standardStdp) and ApplSeqNum in OfferApplNum
+	OfferSmallQty = exec sum(OrderQty) from orders where log(Price * OrderQty) < standardPrice and ApplSeqNum in OfferApplNum
+	// 计算每100ms的买入和卖出大中小单成交量在对应的委托大中小单总成交量中的占比
+	// ActiveStockQtyDif: 净成交量
+	res = select *, (BidSumStockQty - OfferSumStockQty) as ActiveStockQtyDif, (BidBigStockQty \ BidBigQty) as BidBigDealDegree, (BidMidStockQty \ BidMidQty) as BidMidDealDegree, (BidSmallStockQty \ BidSmallQty) as BidSmallDealDegree, (OfferBigStockQty \ OfferBigQty) as OfferBigDealDegree, (OfferMidStockQty \ OfferMidQty) as OfferMidDealDegree, (OfferSmallStockQty \ OfferSmallQty) as OfferSmallDealDegree from res
+	return res
+}
+
+/**
+ * @description: 计算trade里订单数量相关信息
+ */
+def getOrderAmount(trades, t){
+	// 以t = 100ms为连续窗口, 计算每100ms的总订单数量
+	BidBigOrderQty = select count(OrderType).double() as BidBigOrderQty from trades where OrderType="BidBig" and ExecType = `F group by interval(OrigTime, t, 0) as OrigTime
+	BidMidOrderQty = select count(OrderType).double() as BidMidOrderQty from trades where OrderType="BidMid" and ExecType = `F group by interval(OrigTime, t, 0) as OrigTime
+	BidSmallOrderQty = select count(OrderType).double() as BidSmallOrderQty from trades where OrderType="BidSmall" and ExecType = `F group by interval(OrigTime, t, 0) as OrigTime
+	OfferBigOrderQty = select count(OrderType).double() as OfferBigOrderQty from trades where OrderType="OfferBig" and ExecType = `F group by interval(OrigTime, t, 0) as OrigTime
+	OfferMidOrderQty = select count(OrderType).double() as OfferMidOrderQty from trades where OrderType="OfferMid" and ExecType = `F group by interval(OrigTime, t, 0) as OrigTime
+	OfferSmallOrderQty = select count(OrderType).double() as OfferSmallOrderQty from trades where OrderType="OfferSmall" and ExecType = `F group by interval(OrigTime, t, 0) as OrigTime
+	
+	res = select last(SecurityID) as SecurityID from trades where ExecType = `F group by interval(OrigTime, t, 'prev') as OrigTime
+	res = res.lj(BidBigOrderQty, "OrigTime").lj(BidMidOrderQty, "OrigTime").lj(BidSmallOrderQty, "OrigTime").lj(OfferBigOrderQty, "OrigTime").lj(OfferMidOrderQty, "OrigTime").lj(OfferSmallOrderQty, "OrigTime").nullFill!(0)
+	res = select *, (BidBigOrderQty + BidMidOrderQty + BidSmallOrderQty) as BidSumOrderQty, (OfferBigOrderQty + OfferMidOrderQty+OfferSmallOrderQty) as OfferSumOrderQty from res
+	res = select *, (BidSumOrderQty - OfferSumOrderQty as ActiveOrderQtyDif) from res
+	return res
+}
+
+// defg: 自定义聚合函数, 求 a 在 1 - a.size() 的最小二乘估计
+defg betaPlus(a){
+	return  beta(a, 1..a.size())
+}
+
+// 计算
+defg get_moving_positive_AOD(AOD){
+	return sum(iif(AOD > 0, 1, 0)) \ AOD.size()
+}
+
+// 计算净成交量, 净订单量滑动窗口特征
+def getActiveQtyDifFactors(actName){//actName = "ActiveStockQtyDif"
+	metrics=[sqlColAlias(parseExpr("OrigTime"), "data_time"), sqlColAlias(parseExpr("SecurityID"), "ticker")]//["data_time", "ticker"]
+	logo = iif(actName == "ActiveStockQtyDif", "S", "O")
+	metrics.append!(sqlCol(actName))//["data_time", "ticker", "ActiveStockQtyDif"]
+	// 计算净成交量的累计和
+	metrics.append!(sqlColAlias(parseExpr("cumsum(" + actName + ")"), "cumSumA" + logo + "QDif"))
+	// 以 50 的滑动窗口, 1 步长计算净成交量累计和的最小二乘估计值
+	metrics.append!(sqlColAlias(parseExpr("moving(betaPlus," + "cumsum(" + actName + ")" + ", 50, 1)"), "movingSA" + logo + "QDifBeta"))
+	// 以 50 的滑动窗口, 1 步长计算净成交量累计为正值的频率
+	metrics.append!(sqlColAlias(parseExpr("moving(get_moving_positive_AOD," + actName + ", 50, 1)"), "posA" + logo + "QDif"))
+	// 滚动均值: 50 滑动窗口的平均值减去 100 滑动窗口的平均值
+	metrics.append!(sqlColAlias(parseExpr("mavg(" + actName + ", 50, 1) - mavg(" + actName + ", 100, 1)"), "mavgA" + logo + "QDif"))
+	// 计算平均值除以总体标准差
+	metrics.append!(sqlColAlias(parseExpr("mavg(" + actName + ", 50, 1)\\mstdp(" + actName + ", 50, 1)"), "SMDA" + logo + "QDif"))
+	//metrics.append!(sqlColAlias(parseExpr("(0.."+win+").append!(take("+win+",mid_price.size()-"+string(windowSize)+"))-mimin(mid_price,"+string(windowSize)+",1)"),`lowestToLocalDuration))
+	return metrics
+}
+
+/**
+ * @description: 
+ * @param calDate: 要计算的因子的数据日期区间
+ * @param standardDates: 采样区间
+ * @param symbol: 股票代码
+ * @param t: 时间段
+ */
+def getNewFactors(calDate, standardDates, symbol, t){
+	OBTrade = loadTable('dfs://TSDB_Trade','trade')
+	OBOrder = loadTable('dfs://TSDB_Order','order')
+	// 根据采样日期区间计算该区间内每只股票的采样平均交易额和采样标准差
+	standardPriceAll, standardStdpAll = getStandard(standardDates, OBOrder, symbol)
+	// 过滤数据
+	trade = select * from OBTrade where SecurityID in symbol and date(OrigTime) in calDate
+	trade = select * from trade where (time(OrigTime) >= 09:30:00.000 and time(OrigTime) < 11:30:00.000) or (time(OrigTime) >= 13:00:00.000 and time(OrigTime) < 15:00:00)
+	orders = select * from OBOrder where SecurityID in symbol and date(OrigTime) in calDate
+	orders = select * from orders where (time(OrigTime) >= 09:30:00.000 and time(OrigTime) < 11:30:00.000) or (time(OrigTime) >= 13:00:00.000 and time(OrigTime) < 15:00:00)
+	// 分别计算每支股票每一天的成交量和订单数量相关信息
+	for (i in calDate){// i = calDate[0]
+		tradesAll =  select * from trade where date(OrigTime) = i
+		ordersAll =  select * from orders where date(OrigTime) = i
+		// 新增一列OrderType用来判断大单小单
+		update tradesAll set OrderType = string(NULL)
+		if (i == calDate[0]){
+			for (sym in symbol){//sym = symbol[0]
+				trades = select * from tradesAll where securityid = sym
+				orders = select * from ordersAll where securityid = sym
+				// 取出该支股票的采样平均交易额和采样标准差
+				standardPrice = (exec avg from standardPriceAll where securityid = sym)[0]
+				standardStdp = (exec stdp from standardStdpAll where securityid = sym)[0]
+				if (sym == symbol[0]){
+					// 成交量相关信息
+					BidOfferStockAmount = select * from getStockAmount(trades, orders, t, standardPrice, standardStdp)
+					// 订单数量相关信息
+					BidOfferOrderAmount = select * from getOrderAmount(trades, t)
+				}
+				else{
+					tmpBidOfferStockAmount = select * from getStockAmount(trades, orders, t, standardPrice, standardStdp)
+					tmpBidOfferOrderAmount = select * from getOrderAmount(trades, t)
+					BidOfferStockAmount.append!(tmpBidOfferStockAmount)
+					BidOfferOrderAmount.append!(tmpBidOfferOrderAmount)
+					tmpBidOfferStockAmount = NULL
+					tmpBidOfferOrderAmount =NULL
+				}
+			}
+		}
+		else {
+			for (sym in symbol){
+				trades = select * from tradesAll where securityid = sym
+				orders = select * from ordersAll where securityid = sym
+				standardPrice = (exec avg from standardPriceAll where securityid = sym)[0]
+				standardStdp = (exec stdp from standardStdpAll where securityid = sym)[0]
+				if (sym==symbol[0]){
+					BOSA = select * from getStockAmount(trades, orders, t, standardPrice, standardStdp)
+					BOOA = select * from getOrderAmount(trades, t)
+				}
+				else{
+					tmpBOSA = select * from getStockAmount(trades, orders, t, standardPrice, standardStdp)
+					tmpBOOA = select * from getOrderAmount(trades, t)
+					BOSA.append!(tmpBOSA)
+					BOOA.append!(tmpBOOA)
+					tmpBOSA = NULL
+					tmpBOOA = NULL
+				}
+			}
+			BidOfferStockAmount.append!(BOSA)
+			BidOfferOrderAmount.append!(BOOA)
+		}
+	}
+	// 计算净成交量, 净订单量滑动窗口特征
+	ActiveStockQtyDifFactors = sql(select=getActiveQtyDifFactors("ActiveStockQtyDif"), from=BidOfferStockAmount, groupBy=(sqlColAlias(parseExpr("date(OrigTime)"),"date"), sqlColAlias(parseExpr("securityid"), "ticker")), groupFlag=0).eval()//groupFlag: [0: context by, 1: group by, 2: pivot by]
+	ActiveOrderQtyDifFactors = sql(select=getActiveQtyDifFactors("ActiveOrderQtyDif"), from=BidOfferOrderAmount, groupBy=(sqlColAlias(parseExpr("date(OrigTime)"),"date"), sqlColAlias(parseExpr("securityid"), "ticker")), groupFlag=0).eval()
+	// 重命名前两列
+	BidOfferStockAmount.rename!(`data_time`ticker)
+	BidOfferOrderAmount.rename!(`data_time`ticker)
+	// 剔除14: 57后的数据
+	BidOfferStockAmount = removeDailyTimeSeries(BidOfferStockAmount)
+	BidOfferOrderAmount = removeDailyTimeSeries(BidOfferOrderAmount)
+	ActiveStockQtyDifFactors = removeDailyTimeSeries(ActiveStockQtyDifFactors)
+	ActiveOrderQtyDifFactors = removeDailyTimeSeries(ActiveOrderQtyDifFactors)
+	return BidOfferStockAmount, BidOfferOrderAmount, ActiveStockQtyDifFactors, ActiveOrderQtyDifFactors
+}
+

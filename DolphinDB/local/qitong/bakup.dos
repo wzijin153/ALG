@@ -1,0 +1,20 @@
+
+dbPath=["dfs://TSDB_OB", "dfs://TSDB_Order", "dfs://TSDB_Trade"]
+backupDir="/hdd/hdd7/zjwang/DolphinDB_Linux64_V2.00.11/server/backupDB"
+for (i in dbPath){
+    submitJob("backupDB","backup testdb", backupDB, backupDir, i)
+}
+
+for (i in dbPath){
+    submitJob("restoreDB","restore testdb in new cluster",restoreDB,backupDir,i)
+}
+
+
+
+
+
+
+
+
+
+

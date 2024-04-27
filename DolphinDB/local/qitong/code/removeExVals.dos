@@ -1,0 +1,32 @@
+
+/**
+ * @description: 
+ * @param origTable: 
+ * @param referTable: 
+ * @param referTable: 
+ * @return {*}
+ */
+def removeExValue(origTable, referTable, removeFactors){
+	for (removeFactor in removeFactors){
+		// 计算平均值
+		avgValue = sql(sqlCol(removeFactor, avg), referTable, exec=true).eval()
+		// 计算总体标准差
+		stdpValue =  sql(sqlCol(removeFactor, stdp), referTable, exec=true).eval()
+		// 计算最高值
+		highValue = avgValue + 3 * stdpValue
+		// 计算最低值
+		lowValue = avgValue - 3 * stdpValue
+		// 写表
+		sqlUpdate(origTable, parseExpr(string(highValue) + " as " + removeFactor), where=parseExpr(removeFactor + " > " + string(highValue) + " and " + removeFactor + " != NULL")).eval()
+		sqlUpdate(origTable, parseExpr(string(lowValue)+" as "+removeFactor), where=parseExpr(removeFactor + " < " + string(lowValue) + " and " + removeFactor + " != NULL")).eval()
+	}
+}
+
+/**
+ * @description: 特殊处理: 剔除14: 57后的数据
+ * @param t: 需要进行剔除的table
+ * @param removeTime: 剔除对比的时间点, 14: 57
+ */
+def removeDailyTimeSeries(t, removeTime = 14:57m){
+	return select * from t where minute(data_time) < removeTime
+}

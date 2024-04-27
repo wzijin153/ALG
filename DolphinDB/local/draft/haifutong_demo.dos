@@ -1,0 +1,33 @@
+
+
+/**
+ * @description: 定义按照用户指定时间段切分并合并的函数
+ * @param table: 实际的表
+ * @param day: 需要处理的日期
+ * @param intervalList: 时间范围以及指定的划分时间段
+ */
+def splitAndMerge(tableName, day, intervalList) {
+    // result 的列名和类型需要替换成实际用到的类型
+    result = table(1 : 0, `TradeTime`Volume, [DATETIME, LONG])
+    for (intervalRange in intervalList) {// intervalRange = intervalList[2]
+        startTime = intervalRange[0]
+        endTime = intervalRange[1]
+        timePeriod = intervalRange[2]
+        // 选择符合时间范围的数据并计算总交易量
+        subset = select sum(TradeQty) as volume from tableName where second(TradeTime) >= startTime and second(TradeTime) < endTime and date(TradeTime) = day group by interval(TradeTime, timePeriod, "prev") as TradeTime
+        // 插入结果表
+        result.append!(subset)
+    }
+    return result
+}
+intervalList = [[09:00:00, 10:00:00, 60m], [10:00:00, 11:30:00, 30m], [13:00:00, 14:00:00, 30m], [14:00:00, 15:00:00, 60m]]
+resultTable = splitAndMerge(trades, 2022.05.05, intervalList)
+
+
+
+
+trades = loadTable("dfs://TSDB_Trade", "trade")
+pre = select datetime(TradeTime) as TradeTime, TradeQty from trades where date(TradeTime) = 2022.05.05
+trade = select sum(TradeQty) as volume from pre group by interval(TradeTime, 30m, "prev") as TradeTime
+sessions = 09:00:00 10:00:00
+trade = select sum(TradeQty) as volume from pre group by dailyAlignedBar(TradeTime, sessions, 60 * 60) as TradeTime
