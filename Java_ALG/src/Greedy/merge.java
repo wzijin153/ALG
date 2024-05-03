@@ -23,9 +23,9 @@ public class merge {
         LinkedList<int[]> result = new LinkedList<>();
         result.add(intervals[0]);
         for (int i = 1; i < intervals.length; i++) {
-            if (intervals[i][0] <= result.getLast()[1]) {
+            if (intervals[i][0] <= result.getLast()[1])
                 result.getLast()[1] = Math.max(result.getLast()[1], intervals[i][1]);
-            } else result.add(intervals[i]);
+            else result.add(intervals[i]);
         }
         return result.toArray(new int[][]{});
     }
