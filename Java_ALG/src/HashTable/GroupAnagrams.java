@@ -11,7 +11,7 @@ import java.util.List;
  * @author: wangzijin
  * @create: 2024-03-07 17:17
  **/
-
+// https://leetcode.cn/problems/group-anagrams/description/?envType=study-plan-v2&envId=top-100-liked
 // 用 HashMap 求解
 // 对于每个单词，将其排序后的形式作为键, 原始单词作为值，将具有相同键的单词归为一组
 class GroupAnagrams {
@@ -29,7 +29,7 @@ class GroupAnagrams {
             2. 如果 sortedStr 不存在，computeIfAbsent 创建一个新的 ArrayList<String>，将其与键 sortedStr 关联，并返回新创建的列表
             3. 在 computeIfAbsent 返回的值上调用 add(str)
              */
-            map.computeIfAbsent(sortedStr, key -> new ArrayList<>()).add(str);
+            map.computeIfAbsent(sortedStr, key -> new ArrayList<>()).add(str); // 用排序后的字符作为key, 可以满足异位词的定义
         }
         return new ArrayList<>(map.values());
     }

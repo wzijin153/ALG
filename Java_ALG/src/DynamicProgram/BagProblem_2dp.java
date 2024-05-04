@@ -2,12 +2,12 @@ package DynamicProgram;
 
 /**
  * @program: alghorithm
- * @description: 01背包
+ * @description: 2维dp的01背包
  * @author: wangzijin
  * @create: 2024-05-03 17:36
  **/
 // https://programmercarl.com/%E8%83%8C%E5%8C%85%E7%90%86%E8%AE%BA%E5%9F%BA%E7%A1%8001%E8%83%8C%E5%8C%85-1.html#%E7%AE%97%E6%B3%95%E5%85%AC%E5%BC%80%E8%AF%BE
-public class BagProblem {
+public class BagProblem_2dp {
     public static void main(String[] args) {
         int[] weight = {1, 3, 4};
         int[] value = {15, 20, 30};
