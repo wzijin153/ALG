@@ -17,7 +17,7 @@ public class canPartition {
         int target = sum / 2;
         // 1.确定dp数组的含义: dp[j]: 容量为j的背包的最大价值为dp[j]
         int[] dp = new int[target + 1]; // 判断容量为target的背包能否装满
-        // 2.确定递推公式: dp[i] = max(dp[j], dp[j - nums[i]] + nums[i]), nums[i]既是重量又是价值
+        // 2.确定递推公式: dp[j] = max(dp[j], dp[j - nums[i]] + nums[i]), nums[i]既是重量又是价值
         // 3.初始化dp数组, 全部初始化为0
         // 4.确定遍历顺序：先遍历物品，再遍历背包容量
         for (int i = 0; i < length; i++) {

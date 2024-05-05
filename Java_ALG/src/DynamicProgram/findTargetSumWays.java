@@ -24,7 +24,7 @@ public class findTargetSumWays {
 
         int left = (sum + target) / 2;
         int[] dp = new int[left + 1];
-        // 2.确定递推公式: dp[i] += dp[j - nums[j]]
+        // 2.确定递推公式: dp[j] += dp[j - nums[i]]
         /**
          * 在求装满背包有几种方法的情况下(背包类组合问题)，递推公式一般为: dp[j] += dp[j - nums[i]]
          */
