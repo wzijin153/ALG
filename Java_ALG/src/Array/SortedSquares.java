@@ -11,7 +11,7 @@ import java.util.Arrays;
 // https://leetcode.cn/problems/squares-of-a-sorted-array/description/
 class SortedSquares {
     public int[] method(int[] nums) {
-        /***
+        /**
          * 用双指针，不要使用Arrays.sort(nums)
          * 暴力排序时间复杂度：O(n + nlogN)
          * 双指针时间复杂度：O(n)
