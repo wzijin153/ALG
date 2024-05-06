@@ -9,7 +9,7 @@ package LinkedList;
 
 public class ListNode {
     // 数据域
-    int val;
+    public int val;
     // next域, 指向下一个节点
     public ListNode next;
 
