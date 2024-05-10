@@ -7,8 +7,7 @@ package LinkedList;
  * @create: 2024-02-28 19:04
  **/
 
-// 反转一个单链表 https://leetcode.cn/problems/reverse-linked-list/
-// 输入: 1->2->3->4->5->NULL 输出: 5->4->3->2->1->NULL
+// https://leetcode.cn/problems/reverse-linked-list/
 class reverseList {
     public ListNode method(LinkedList list) {
         ListNode cur = list.head;

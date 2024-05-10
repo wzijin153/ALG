@@ -17,15 +17,13 @@ package LinkedList;
 // 图解: https://labuladong.online/algo/essential-technique/linked-list-skills-summary-2/#%E4%B8%A4%E4%B8%AA%E9%93%BE%E8%A1%A8%E6%98%AF%E5%90%A6%E7%9B%B8%E4%BA%A4
 class getIntersectionNode {
     public ListNode method(ListNode headA, ListNode headB) {
-        if (headA == null || headB == null) {
-            return null;
+        ListNode curA = headA, curB = headB;
+        while (curA != curB) {
+            if (curA != null) curA = curA.next;
+            else curA = headB;
+            if (curB != null) curB = curB.next;
+            else curB = headA;
         }
-        ListNode nodeA = headA, nodeB = headB;
-        while (nodeA != nodeB) {
-            //
-            nodeA = nodeA == null ? headB : nodeA.next;
-            nodeB = nodeB == null ? headA : nodeB.next;
-        }
-        return nodeA;
+        return curA;
     }
 }
