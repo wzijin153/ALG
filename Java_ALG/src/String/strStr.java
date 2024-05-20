@@ -9,34 +9,32 @@ package String;
 //https://leetcode.cn/problems/find-the-index-of-the-first-occurrence-in-a-string/
 public class strStr {
     public int method(String haystack, String needle) {
-        if (needle.length() > haystack.length()) return -1;
-        int nLen = needle.length();
-//        for (int i = 0; i <= haystack.length() - nLen; i++) {
-//            String substring = haystack.substring(i, i + nLen);
-//            if (substring.equals(needle)) return i;
-//        }
+        int length1 = haystack.length();
+        int length2 = needle.length();
+        if (length2 > length1) return -1;
         int[] next = getNext(needle);
         int j = 0;
-        for (int i = 0; i < haystack.length(); i++) {
-            while (j > 0 && needle.charAt(j) != haystack.charAt(i)) {
-                j = next[j - 1];
-            }
+        for (int i = 0; i < length1; i++) {
+            while (j > 0 && needle.charAt(j) != haystack.charAt(i)) j = next[j - 1];
             if (needle.charAt(j) == haystack.charAt(i)) j++;
-            if (j == nLen) return i - nLen + 1;
+            if (j == length2) return i - length2 + 1;
         }
         return -1;
     }
 
     //KMP 算法
     int[] getNext(String s) {
-        int[] next = new int[s.length()];
+        int length = s.length();
+        // 1.初始化next数组
+        int[] next = new int[length];
         int j = 0;// j -> 前缀末尾
         next[0] = 0;
-        for (int i = 1; i < s.length(); i++) {// i -> 后缀末尾, 这里 i 要从 1 开始!!!, 因为 i 总是在 j 的前面
-            while (j > 0 && s.charAt(j) != s.charAt(i)) {
-                j = next[j - 1];
-            }
+        for (int i = 1; i < length; i++) {// i -> 后缀末尾, 这里 i 要从 1 开始!!!, 因为 i 总是在 j 的前面
+            // 2.处理前后缀不相同的情况, 此时j要持续回退到next数组里前一位元素所代表的下标
+            while (j > 0 && s.charAt(j) != s.charAt(i)) j = next[j - 1];
+            // 3.处理前后缀相同的情况
             if (s.charAt(j) == s.charAt(i)) j++;
+            // 4.更新next数组
             next[i] = j;
         }
         return next;
