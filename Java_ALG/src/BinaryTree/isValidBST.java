@@ -18,6 +18,7 @@ public class isValidBST {
     // 递归, 中序遍历, 元素值是单调递增的(双指针法)
     boolean traversal(TreeNode root) {
         if (root == null) return true;
+        // 必须使用中序, 先返回结果
         boolean left = traversal(root.left);
         // 二叉搜索树的val值是递增的, 如果前一个节点的val值大于等于当前节点的val, 则不是二叉树
         if (pre != null && pre.val >= root.val) return false;
